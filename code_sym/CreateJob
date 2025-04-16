@@ -1,0 +1,19 @@
+#!/bin/bash
+#inputfile="CollectJob"
+paramfile="scripts/param.sh"
+#inputfile="scripts/dataprocess.sh"
+# inputfile="scripts/dataprocess.sh"
+# inputfile="scripts/converge.sh"
+inputfile="scripts/SbatchJob.sh"
+for g in $(seq 2.8 0.2 4.0)
+# for g in $(seq 2.0 0.2 4.0)
+do
+
+    sed -i "3s/g=\(.*\)/g=$g/" ${paramfile} 
+    sed -i "25s/g=\(.*\)/g=$g/" ${inputfile} 
+#    source ${paramfile}
+   # sleep 3s
+    sbatch $inputfile
+    sleep 3s
+done
+
