@@ -1,0 +1,1 @@
+find ./data/symGauge -name "*.csv" | rsync -av --files-from=- . ./puredata/symGauge

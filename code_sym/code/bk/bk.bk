@@ -1,0 +1,44 @@
+
+        # # ## Allocate FermionPathIntegral type for both the spin-up and spin-down electrons.
+        # fermion_path_integral_up = FermionPathIntegral(tight_binding_parameters = tight_binding_parameters, β = β, Δτ = Δτ)
+        # fermion_path_integral_dn = FermionPathIntegral(tight_binding_parameters = tight_binding_parameters, β = β, Δτ = Δτ)
+        # # @show fermion_path_integral_up
+        # if U != 0
+        #     ## Initialize the FermionPathIntegral type for both the spin-up and spin-down electrons.
+        #     initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_parameters)
+        #     initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_ising_parameters)
+        # end
+        # ## Initialize the fermion path integral type with respect to electron-photon interaction.
+        # initialize!(fermion_path_integral_up, fermion_path_integral_dn, electron_photon_parameters)
+
+        # # tup = fermion_path_integral_up.t
+        # tdn = fermion_path_integral_dn.t
+        # tight_binding_parameters_up = tight_binding_parameters
+        # (; bond_ids, bond_slices) = tight_binding_parameters_up
+        # bonds = model_geometry.bonds
+        # correlation_container = measurement_container.equaltime_correlations["current"]
+        # id_pairs = correlation_container.id_pairs
+        # @show id_pairs
+        # # @show bonds[id_pairs[1]],bonds[id_pairs[2]]
+        # for i in eachindex(id_pairs)
+        #     # get the hopping IDs associated with current operators
+        #     id_pair = id_pairs[i]
+        #     hopping_id_0 = id_pair[1]
+        #     hopping_id_1 = id_pair[2]
+        #     # get the bond IDs associated with the hopping IDs
+        #     bond_id_0 = bond_ids[hopping_id_0]
+        #     bond_id_1 = bond_ids[hopping_id_1]
+        #     # get the bond definitions
+        #     bond_0 = bonds[bond_id_0]
+        #     bond_1 = bonds[bond_id_1]
+        #     @show id_pair,hopping_id_0,hopping_id_1,bond_id_0,bond_id_1
+        #     # get the effective hopping amptlitudes for each of the two hopping ID's in question
+        #     tup0 = @view tup[bond_slices[hopping_id_0], Lτ]
+        #     tup0′ = reshape(tup0, lattice.L...)
+        #     tdn1 = @view tdn[bond_slices[hopping_id_1], Lτ]
+        #     tdn1′ = reshape(tdn1, lattice.L...)
+        #     @show bond_1,bond_0
+        #     # measure the current-current correlation
+        #     # current_correlation!(correlations[i], bond_1, bond_0, tdn1′, tup0′, unit_cell, lattice,
+        #     #                      Gdn_τ0, Gdn_0τ, Gdn_ττ, Gup, -1, +1, sgn, average)
+        # end
