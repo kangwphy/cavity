@@ -8,6 +8,7 @@ import SmoQyDQMC.JDQMCFramework    as dqmcf
 # import SmoQyDQMC.JDQMCMeasurements as dqmcm
 using LatticeUtilities
 using MPI
+import SmoQyDQMC.HubbardModel
 ###########################
 ## ELECTRON-photon MODEL ##
 ###########################
@@ -35,9 +36,10 @@ include("checkconverge.jl")
 include("mydataprocess/process_measurements.jl")
 # include("Measurements/process_correlation_measurements.jl")
 # initialize MPI
+# using SmoQyDQMC
 MPI.Init()
 ## Define top-level function for running DQMC simulation
-function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PBCx, PBCy, N_burnin, N_updates, N_bins, eqt_average, tdp_average; filepath = ".",Nt = 10, at =1)
+function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PBCx, PBCy, N_burnin, N_updates, N_bins, eqt_average, tdp_average; filepath = ".",Nt = 10, at = 1, init=0)
     # Initialize the MPI communicator.
     comm = MPI.COMM_WORLD
     start_time = time()
@@ -51,7 +53,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     end
     
     # folder = @sprintf "data/photon_minicoup_square_U%.2f_w%.2f_g%.2f_mu%.2f_L%d_b%.2f" U Ω g μ L β
-    datafolder_prefix =  @sprintf "%s/photon_minicoup_square_U%.2f_w%.2f_g%.2f_mu%.2f_Lx%d_Ly%d_BC%d%d_b%.2f_eqavg%d_tdavg%d" dir U Ω g μ Lx Ly PBCx PBCy β eqt_average tdp_average
+    datafolder_prefix =  @sprintf "%s/photon_minicoup_square_U%.2f_w%.2f_g%.2f_mu%.2f_Lx%d_Ly%d_BC%d%d_b%.2f_eqavg%d_tdavg%d_init%d" dir U Ω g μ Lx Ly PBCx PBCy β eqt_average tdp_average init
     # datafolder_prefix = folder*datafolder_prefix
 
     # Get the MPI comm rank, which fixes the process ID (pID).
@@ -188,13 +190,22 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     tight_binding_model = TightBindingModel(
         model_geometry = model_geometry,
         t_bonds = [bond_px, bond_py], # defines hopping
-        t_mean = [0, t],            # defines corresponding hopping amplitude
+        t_mean = [0.0+0.0im, 0.0+0.0im],            # defines corresponding hopping amplitude
         μ = μ,                      # set chemical potential
         ϵ_mean = [0.]               # set the (mean) on-site energy
     )
 
     # @show tight_binding_model.t_bonds, tight_binding_model.t_bond_ids
+    # Initialize the Hubbard interaction in the model.
+
+    hubbard_model = HubbardModel(
+    shifted = false,
+    U_orbital = [1],
+    U_mean = [U],
+    )
+
     
+
     ## Initialize a null electron-photon model.
     electron_photon_model = ElectronPhotonModel(
         model_geometry = model_geometry,
@@ -286,11 +297,10 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         tight_binding_model = tight_binding_model,
         photon_modes = (photon_id, photon_id),
         # bond = lu.Bond(orbitals = (1,1), displacement = [0,0]),
-        bonds = [bond_px],
+        bonds = [bond_px,bond_py],
         α_mean = α
         )
         
-
         # add_min_coupling!
         min_coupling_id = add_min_coupling!(
             electron_photon_model = electron_photon_model,
@@ -305,22 +315,54 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             electron_photon_model = electron_photon_model,
             tight_binding_parameters = tight_binding_parameters,
             model_geometry = model_geometry,
-            PBCx = PBCx,
+            PBCx = PBCx, PBCy = PBCy, init = init,
             rng = rng
             )
+
+        # Initialize Hubbard interaction parameters.
+        hubbard_parameters = HubbardParameters(
+            model_geometry = model_geometry,
+            hubbard_model = hubbard_model,
+            rng = rng
+        )
+
+        # Apply Ising Hubbard-Stranonvich (HS) transformation, and initialize
+        # corresponding HS fields that will be sampled in DQMC simulation.
+        hubbard_ising_parameters = HubbardIsingHSParameters(
+            β = β, Δτ = Δτ,
+            hubbard_parameters = hubbard_parameters,
+            rng = rng
+        )
+        
+        ## Write the model summary to file.
+        # if U != 0
+         
+        # end
         if iszero(simulation_info.pID)
             @show electron_photon_parameters
             @show tight_binding_parameters
+            if U!=0
+                @show hubbard_parameters
+                @show hubbard_ising_parameters
+            end
         end
-        ## Write the model summary to file.
-        model_summary(
+        if U!=0
+            model_summary(
+            simulation_info = simulation_info,
+            β = β, Δτ = Δτ,
+            model_geometry = model_geometry,
+            tight_binding_model = tight_binding_model,
+            interactions = ( hubbard_model, electron_photon_model,)
+        )
+        else
+            model_summary(
             simulation_info = simulation_info,
             β = β, Δτ = Δτ,
             model_geometry = model_geometry,
             tight_binding_model = tight_binding_model,
             interactions = ( electron_photon_model,)
         )
-
+        end
 
         # #########################################
         # ### INITIALIZE FINITE MODEL PARAMETERS ##
@@ -346,9 +388,37 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry = model_geometry,
             correlation = "greens",
             time_displaced = true,
-            tdp_average = tdp_average,
+            # tdp_average = tdp_average,
 	    pairs = [(1, 1)]
         )
+
+        initialize_correlation_measurements!(
+            measurement_container = measurement_container,
+            model_geometry = model_geometry,
+            correlation = "holegreens",
+            time_displaced = true,
+            # tdp_average = tdp_average,
+            pairs = [(1, 1)]
+        )
+
+        initialize_correlation_measurements!(
+            measurement_container = measurement_container,
+            model_geometry = model_geometry,
+            correlation = "greens_onsite",
+            time_displaced = true,
+            # tdp_average = tdp_average,
+            pairs = [(1, 1)]
+        )
+
+        initialize_correlation_measurements!(
+            measurement_container = measurement_container,
+            model_geometry = model_geometry,
+            correlation = "holegreens_onsite",
+            time_displaced = true,
+            # tdp_average = tdp_average,
+            pairs = [(1, 1)]
+        )
+
 
         ## measure equal-times green's function for all τ
         initialize_correlation_measurements!(
@@ -459,6 +529,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry,
             tight_binding_parameters,
             electron_photon_parameters,
+            hubbard_parameters,
+            hubbard_ising_parameters,
             dG = δG, dtheta = δθ, n_stab = n_stab,photon_id=photon_id
         )
 
@@ -466,7 +538,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
 
     # If resuming simulation from previous checkpoint.
     else
-        @show "continue from ",checkpoint_filename_new
+        @show simulation_info.pID," continue from ",checkpoint_filename_new
         # Initialize checkpoint to nothing before it is loaded.
         checkpoint = nothing
 
@@ -519,7 +591,9 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         model_geometry           = checkpoint["model_geometry"]
         measurement_container    = checkpoint["measurement_container"]
         tight_binding_parameters = checkpoint["tight_binding_parameters"]
-        electron_photon_parameters = checkpoint["electron_photon_parameters"]
+        electron_photon_parameters= checkpoint["electron_photon_parameters"]
+        hubbard_parameters       = checkpoint["hubbard_parameters"]
+        hubbard_ising_parameters = checkpoint["hubbard_ising_parameters"]
         δG                       = checkpoint["dG"]
         δθ                       = checkpoint["dtheta"]
         n_stab                   = checkpoint["n_stab"]
@@ -543,8 +617,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     # @show fermion_path_integral_up
     if U != 0
         ## Initialize the FermionPathIntegral type for both the spin-up and spin-down electrons.
-        initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_parameters)
-        initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_ising_parameters)
+        SmoQyDQMC.initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_parameters)
+        SmoQyDQMC.initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_ising_parameters)
     end
     ## Initialize the fermion path integral type with respect to electron-photon interaction.
     initialize!(fermion_path_integral_up, fermion_path_integral_dn, electron_photon_parameters)
@@ -571,14 +645,16 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     logdetGup, sgndetGup = dqmcf.calculate_equaltime_greens!(Gup, fermion_greens_calculator_up)
     logdetGdn, sgndetGdn = dqmcf.calculate_equaltime_greens!(Gdn, fermion_greens_calculator_dn)
 
-    δG = zero(typeof(logdetGup))
-    δθ = zero(Float64)
-    Gup_ττ = similar(Gup) # G↑(τ,τ)
-    Gup_τ0 = similar(Gup) # G↑(τ,0)
-    Gup_0τ = similar(Gup) # G↑(0,τ)
-    Gdn_ττ = similar(Gdn) # G↓(τ,τ)
-    Gdn_τ0 = similar(Gdn) # G↓(τ,0)
-    Gdn_0τ = similar(Gdn) # G↓(0,τ)
+
+    ########## Benchmark with free configuration here ########
+    # δG = zero(typeof(logdetGup))
+    # δθ = zero(Float64)
+    # Gup_ττ = similar(Gup) # G↑(τ,τ)
+    # Gup_τ0 = similar(Gup) # G↑(τ,0)
+    # Gup_0τ = similar(Gup) # G↑(0,τ)
+    # Gdn_ττ = similar(Gdn) # G↓(τ,τ)
+    # Gdn_τ0 = similar(Gdn) # G↓(τ,0)
+    # Gdn_0τ = similar(Gdn) # G↓(0,τ)
     # # @show measurement_container
     # (logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = make_measurements!(
     #             measurement_container,
@@ -608,6 +684,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     #     Δτ = Δτ
     # )
     # process_measurements(simulation_info.datafolder, 1)
+    ########## Benchmark with free configuration here ########
+
 
     ## Initialize Hamitlonian/Hybrid monte carlo (HMC) updater.
     hmc_updater = EFAHMCUpdater(
@@ -827,7 +905,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             Et/=bin_size
             elapsed_time = time()-start_time
             accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
-            @show bin, bin_size, elapsed_time, accept_ratio, Et
+            local_accept_ratio = additional_info["local_acceptance_rate"]/(N_burnin + bin*bin_size)
+            @show bin, bin_size, elapsed_time, accept_ratio, local_accept_ratio, Et
         end
 
         ## Write the average measurements for the current bin to file.
@@ -895,7 +974,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     # # # Have the primary MPI process calculate the final error bars for all measurements,
     # # # writing final statisitics to CSV files.
     if iszero(simulation_info.pID)
-        process_measurements(simulation_info.datafolder, 50, time_displaced=true, N_start = 11)
+        process_measurements(simulation_info.datafolder, 10, time_displaced=true, N_start = 1)
     end
 
 
@@ -925,6 +1004,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     prefix = ARGS[16]
     Nt = parse(Int, ARGS[17])
     at = parse(Float64, ARGS[18])
+    init = parse(Int, ARGS[19])
     ## Run the simulation.
-    run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PBCx, PBCy, N_burnin, N_updates, N_bins, eqt_average, tdp_average; filepath = "./data/"*prefix,Nt = Nt,at = at)
+    run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PBCx, PBCy, N_burnin, N_updates, N_bins, eqt_average, tdp_average; filepath = "./data/"*prefix,Nt = Nt,at = at, init = init)
 end

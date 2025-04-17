@@ -1,0 +1,113 @@
+beta = 4.000000
+
+dtau = 0.100000
+
+L_tau = 40
+
+[Geometry]
+
+dimensions = 2
+
+[Geometry.UnitCell]
+
+orbitals = 1
+
+[Geometry.UnitCell.LatticeVectors]
+
+a_1 = [1.0, 0.0]
+a_2 = [0.0, 1.0]
+
+[Geometry.UnitCell.ReciprocalVectors]
+
+b_1 = [6.283185, 0.0]
+b_2 = [0.0, 6.283185]
+
+[[Geometry.UnitCell.BasisVectors]]
+
+ORBITAL_ID = 1
+r          = [0.0, 0.0]
+
+
+[Geometry.Lattice]
+
+L        = [4, 4]
+periodic = [true, true]
+
+[[Geometry.Bond]]
+
+BOND_ID      = 1
+orbitals     = [1, 1]
+displacement = [0, 0]
+
+[[Geometry.Bond]]
+
+BOND_ID      = 2
+orbitals     = [1, 1]
+displacement = [1, 0]
+
+[[Geometry.Bond]]
+
+BOND_ID      = 3
+orbitals     = [1, 1]
+displacement = [0, 1]
+
+[[Geometry.Bond]]
+
+BOND_ID      = 4
+orbitals     = [1, 1]
+displacement = [-1, 0]
+
+[[Geometry.Bond]]
+
+BOND_ID      = 5
+orbitals     = [1, 1]
+displacement = [0, -1]
+
+[TightBindingModel]
+
+chemical_potential = 0.00000000
+
+[TightBindingModel.onsite_energy]
+
+e_mean = [0.0]
+e_std  = [0.0]
+
+[[TightBindingModel.hopping]]
+
+HOPPING_ID   = 1
+BOND_ID      = 2
+orbitals     = [1, 1]
+displacement = [1, 0]
+t_mean_real  = 0.00000000
+t_mean_imag  = 0.00000000
+t_std        = 0.00000000
+
+[[TightBindingModel.hopping]]
+
+HOPPING_ID   = 2
+BOND_ID      = 3
+orbitals     = [1, 1]
+displacement = [0, 1]
+t_mean_real  = 0.00000000
+t_mean_imag  = 0.00000000
+t_std        = 0.00000000
+
+[HubbardModel]
+
+U_orbital_ids = [1]
+U_mean        = [8.0]
+U_std         = [0.0]
+shifted       = false
+
+[ElectronPhotonModel]
+
+[[ElectronPhotonModel.PhotonMode]]
+
+PHONON_ID    = 1
+ORBITAL_ID   = 1
+mass         = 1.000000
+omega_mean   = 1.000000
+omega_std    = 0.000000
+omega_4_mean = 0.000000
+omega_4_std  = 0.000000
+

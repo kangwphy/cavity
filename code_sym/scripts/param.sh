@@ -5,7 +5,7 @@ L=16
 Lx=$L
 Ly=$L
 bt=$L
-U=0
+U=1
 w=1
 mu=0
 N_burnin=0
@@ -14,7 +14,7 @@ N_bins=60
 
 PBCx=0
 PBCy=0
-prefix=symGauge____0
+prefix=symGauge
 eqt_average=false
 tdp_average=false
 

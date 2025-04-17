@@ -20,7 +20,7 @@
 source ./scripts/param.sh
 ntask=30
 Nt=8
-at=0.45
+at=0.2
 sID=1
 g=1.8
 init=0
@@ -29,7 +29,10 @@ if [ ! -d $folder ];then
     mkdir -p $folder
 fi
 
-mpiexec -n $ntask julia code/mainMPI_spinless.jl $sID $U $w $g $mu $bt $Lx $Ly $PBCx $PBCy $N_burnin $N_updates $N_bins $eqt_average $tdp_average $prefix $Nt $at $init >> ${folder}/${sID}_${Nt}_${at}  2>&1 &
+# mpiexec -n $ntask julia code/mainMPI_spinless.jl $sID $U $w $g $mu $bt $Lx $Ly $PBCx $PBCy $N_burnin $N_updates $N_bins $eqt_average $tdp_average $prefix $Nt $at $init >> ${folder}/${sID}_${Nt}_${at}  2>&1 &
+
+julia code/mainMPI.jl $sID $U $w $g $mu $bt $Lx $Ly $PBCx $PBCy $N_burnin $N_updates $N_bins $eqt_average $tdp_average $prefix $Nt $at $init >> ${folder}/${sID}_${Nt}_${at}  2>&1 &
+
 # julia mainMPI.jl 1 0 1 1 0 1 2 2 0 0 10 10 1 false false . > phy  2>&1 &
 # julia mainMPI.jl 1 0 1 0 0 4 4 4 0 0 10 10 1 false false . > phy  2>&1 &
 

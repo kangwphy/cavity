@@ -25,7 +25,7 @@ coefficient, and is distributed according to a normal distribution with mean `Ω
 - `Ω4_std::E`: Standard deviation of normal distribution the anharmonic coefficient ``\Omega_{4,\mathbf{i},\nu}`` is sampled from.
 """
 
-using SmoQyDQMC
+# using SmoQyDQMC
 import SmoQyDQMC.LatticeUtilities  as lu
 using LatticeUtilities
 struct PhotonMode{E<:AbstractFloat}
