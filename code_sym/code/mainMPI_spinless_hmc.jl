@@ -380,14 +380,14 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             pairs = [(1, 1)]
         )
         # # Initialize the spin-z correlation function measurement.
-        initialize_correlation_measurements!(
-            measurement_container = measurement_container,
-            model_geometry = model_geometry,
-            correlation = "spin_z",
-            time_displaced = false,
-            integrated = true,
-            pairs = [(1, 1)]
-        )
+        # initialize_correlation_measurements!(
+        #     measurement_container = measurement_container,
+        #     model_geometry = model_geometry,
+        #     correlation = "spin_z",
+        #     time_displaced = false,
+        #     integrated = true,
+        #     pairs = [(1, 1)]
+        # )
         # # Measure all possible combinations of bond pairing channels
         # # for the bonds we have defined. We will need each of these
         # # pairs channels measured in order to reconstruct the extended

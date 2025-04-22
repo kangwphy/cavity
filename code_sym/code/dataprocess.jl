@@ -24,7 +24,7 @@ include("mydataprocess/process_measurements.jl")
 ## Define top-level function for running DQMC simulation
 function dataprocess(datafolder, N_bins, N_start = 1)
     start_time = time()
-    process_measurements(datafolder, N_bins, time_displaced=false, N_start = N_start)
+    process_measurements(datafolder, N_bins, time_displaced=true, N_start = N_start)
     elapsed_time = time()-start_time
     @show elapsed_time
 

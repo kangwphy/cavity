@@ -22,14 +22,16 @@
 
 
 source ./scripts/param.sh
-g=4.0
-
-folder=./logs/${prefix}/Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}/g${g}w${w}U${U}mu${mu}Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}avg_${eqt_average}${tdp_average}
+g=2.0
+init=0
+folder=./logs/${prefix}/Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}/g${g}w${w}U${U}mu${mu}Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}avg_${eqt_average}${tdp_average}init${init}
 if [ ! -d $folder ];then
     mkdir -p $folder
 fi
 
 # ntask=80
-julia code/checkconverge.jl $sID $U $w $g $mu $bt $Lx $Ly $PBCx $PBCy $N_burnin $N_updates $N_bins $eqt_average $tdp_average $prefix > ${folder}/converge  2>&1 &
+# julia code/checkconverge_new.jl $sID $U $w $g $mu $bt $Lx $Ly $PBCx $PBCy $N_burnin $N_updates $N_bins $eqt_average $tdp_average $prefix > ${folder}/converge  2>&1 &
+
+julia  code/checkconverge_new.jl $sID $U $w $g $mu $bt $Lx $Ly $PBCx $PBCy $eqt_average $tdp_average $prefix $init > ${folder}/converge  2>&1 &
 
 wait

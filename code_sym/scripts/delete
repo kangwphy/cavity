@@ -1,0 +1,14 @@
+cd data/symGauge/photon_minicoup_square_U0.00_w1.00_g2.00_mu0.00_Lx15_Ly15_BC00_b15.00_eqavg0_tdavg0_init0-1
+
+# 1. 删除所有包含 pID-3 的文件
+find . -type f -name '*pID-7*' -exec rm -v {} \;
+find . -type f -name '*pID-9*' -exec rm -v {} \;
+# # 2. 将所有包含 pID-29 的文件名改为 pID-3
+find . -type f -name '*pID-29*' | while read file; do
+    newfile=$(echo "$file" | sed 's/pID-29/pID-7/')
+    mv -v "$file" "$newfile"
+done
+find . -type f -name '*pID-28*' | while read file; do
+    newfile=$(echo "$file" | sed 's/pID-28/pID-9/')
+    mv -v "$file" "$newfile"
+done

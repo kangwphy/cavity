@@ -199,7 +199,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     # Initialize the Hubbard interaction in the model.
 
     hubbard_model = HubbardModel(
-    shifted = false,
+    shifted = true,
     U_orbital = [1],
     U_mean = [U],
     )
@@ -893,6 +893,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
                 Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ,
                 model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
                 coupling_parameters = (
+                    hubbard_parameters,
+                    hubbard_ising_parameters,
                     electron_photon_parameters,
                 )
             )
@@ -900,14 +902,25 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         
 
         if iszero(simulation_info.pID)
+        # if true
             # @show measurement_container.local_measurements
-            Et = sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N
-            Et/=bin_size
+            # Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
+            # Et/=bin_size
+            # Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
+            # accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
+            # local_accept_ratio = additional_info["local_acceptance_rate"]/(N_burnin + bin*bin_size)
+            # @show simulation_info.pID, bin, bin_size, elapsed_time, accept_ratio, local_accept_ratio, Et,Ek
             elapsed_time = time()-start_time
-            accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
-            local_accept_ratio = additional_info["local_acceptance_rate"]/(N_burnin + bin*bin_size)
-            @show bin, bin_size, elapsed_time, accept_ratio, local_accept_ratio, Et
+            @show bin, elapsed_time
         end
+
+        accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
+        local_accept_ratio = additional_info["local_acceptance_rate"]/(N_burnin + bin*bin_size)
+        Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
+        Et/=bin_size
+        Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
+        @show simulation_info.pID,bin,bin_size accept_ratio,local_accept_ratio, Et, Ek
+        # end
 
         ## Write the average measurements for the current bin to file.
         write_measurements!(
@@ -968,13 +981,13 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
 
     #### compute the energy at each MC step to determine the Nburnin ####
     if iszero(simulation_info.pID)
-        checkconverge(simulation_info.datafolder,0,N)
+        checkconverge(simulation_info.datafolder,[],N)
     end
 
     # # # Have the primary MPI process calculate the final error bars for all measurements,
     # # # writing final statisitics to CSV files.
     if iszero(simulation_info.pID)
-        process_measurements(simulation_info.datafolder, 10, time_displaced=true, N_start = 1)
+        process_measurements(simulation_info.datafolder, 10, time_displaced=false, N_start = 3)
     end
 
 

@@ -8,21 +8,20 @@
 
 
 sID=1
-g=10.0
 L=4
 Lx=$L
 Ly=$L
 bt=$L
-U=8
+U=4
 w=1
 mu=0
 N_burnin=0
-N_updates=100
-N_bins=10
+N_updates=1200
+N_bins=12
 
 PBCx=1
 PBCy=1
-prefix=symGauge
+prefix=symGauge2
 eqt_average=false
 tdp_average=false
 
@@ -32,10 +31,10 @@ fi
 
 
 Nt=8
-at=0.2
-sID=1
-g=10
-init=0
+at=0.1
+sID=2
+g=10.0
+init=3
 folder=./logs/${prefix}/Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}/g${g}w${w}U${U}mu${mu}Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}avg_${eqt_average}${tdp_average}init${init}
 if [ ! -d $folder ];then
     mkdir -p $folder

@@ -347,7 +347,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry = model_geometry,
             correlation = "greens",
             time_displaced = true,
-            # tdp_average = tdp_average,
+            tdp_average = tdp_average,
             pairs = [(1, 1)]
         )
 
@@ -356,7 +356,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry = model_geometry,
             correlation = "holegreens",
             time_displaced = true,
-            # tdp_average = tdp_average,
+            tdp_average = tdp_average,
             pairs = [(1, 1)]
         )
 
@@ -409,16 +409,15 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             tdp_average = tdp_average,
             pairs = [(1, 1)]
         )
-        
-        # Initialize the spin-z correlation function measurement.
-        initialize_correlation_measurements!(
-            measurement_container = measurement_container,
-            model_geometry = model_geometry,
-            correlation = "spin_z",
-            time_displaced = false,
-            integrated = true,
-            pairs = [(1, 1)]
-        )
+        # # Initialize the spin-z correlation function measurement.
+        # initialize_correlation_measurements!(
+        #     measurement_container = measurement_container,
+        #     model_geometry = model_geometry,
+        #     correlation = "spin_z",
+        #     time_displaced = false,
+        #     integrated = true,
+        #     pairs = [(1, 1)]
+        # )
         # # Measure all possible combinations of bond pairing channels
         # # for the bonds we have defined. We will need each of these
         # # pairs channels measured in order to reconstruct the extended
@@ -638,8 +637,6 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     #     Δτ = Δτ
     # )
     # process_measurements(simulation_info.datafolder, 1)
-    ########## Benchmark with free configuration here ########
-
 
     ## Initialize Hamitlonian/Hybrid monte carlo (HMC) updater.
     hmc_updater = EFAHMCUpdater(
@@ -848,14 +845,18 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         if iszero(simulation_info.pID)
         # if true
             # @show measurement_container.local_measurements
-            Et = sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N
+            Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
             Et/=bin_size
+            Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
             elapsed_time = time()-start_time
             accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
-            @show simulation_info.pID, bin, bin_size, elapsed_time, accept_ratio, Et
+            @show simulation_info.pID, bin, bin_size, elapsed_time, accept_ratio, Et,Ek
         else
             accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
-            @show simulation_info.pID, accept_ratio
+            Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
+            Et/=bin_size
+            Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
+            @show simulation_info.pID, accept_ratio , Et, Ek
         end
         # @show measurement_container.time_displaced_correlations["greens_onsite"]
         ## Write the average measurements for the current bin to file.
@@ -917,14 +918,14 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
 
     #### compute the energy at each MC step to determine the Nburnin ####
     if iszero(simulation_info.pID)
-        checkconverge(simulation_info.datafolder,0,N)
+        checkconverge(simulation_info.datafolder,[],N)
     end
 
     # # Have the primary MPI process calculate the final error bars for all measurements,
     # # writing final statisitics to CSV files.
     if iszero(simulation_info.pID)
 #	    process_measurements(simulation_info.datafolder, 2, time_displaced=true, N_start = 1)
-    	process_measurements(simulation_info.datafolder, 50, time_displaced=true, N_start = 11)
+    	process_measurements(simulation_info.datafolder, 10, time_displaced=true, N_start = 3)
     end
 
 

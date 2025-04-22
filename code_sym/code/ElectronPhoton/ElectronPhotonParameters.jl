@@ -3,8 +3,9 @@ include("HolsteinParameters.jl")
 include("SSHParameters.jl")
 include("MinParameters.jl")
 include("DispersionParameters.jl")
-using SmoQyDQMC
-
+# using SmoQyDQMC
+import SmoQyDQMC.initialize!
+import SmoQyDQMC.bosonic_action
 # import SmoQyDQMC.JDQMCFramework    as dqmcf
 using JDQMCFramework
 # export ElectronphotonParameters, update!
