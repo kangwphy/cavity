@@ -335,9 +335,6 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         )
         
         ## Write the model summary to file.
-        # if U != 0
-         
-        # end
         if iszero(simulation_info.pID)
             @show electron_photon_parameters
             @show tight_binding_parameters
@@ -371,7 +368,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         ## Calculating weight
         ## Initialize the container that measurements will be accumulated into.
         measurement_container = initialize_measurement_container(model_geometry, β, Δτ)
-        # @show measurement_container
+
         ## Initialize the tight-binding model related measurements, like the hopping energy.
         initialize_measurements!(measurement_container, tight_binding_model)
 
@@ -406,7 +403,6 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry = model_geometry,
             correlation = "greens_onsite",
             time_displaced = true,
-            # tdp_average = tdp_average,
             pairs = [(1, 1)]
         )
 
@@ -415,10 +411,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry = model_geometry,
             correlation = "holegreens_onsite",
             time_displaced = true,
-            # tdp_average = tdp_average,
             pairs = [(1, 1)]
         )
-
 
         ## measure equal-times green's function for all τ
         initialize_correlation_measurements!(
@@ -450,15 +444,15 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             tdp_average = tdp_average,
             pairs = [(1, 1)]
         )
-        # # Initialize the spin-z correlation function measurement.
-        # initialize_correlation_measurements!(
-        #     measurement_container = measurement_container,
-        #     model_geometry = model_geometry,
-        #     correlation = "spin_z",
-        #     time_displaced = false,
-        #     integrated = true,
-        #     pairs = [(1, 1)]
-        # )
+        # Initialize the spin-z correlation function measurement.
+        initialize_correlation_measurements!(
+            measurement_container = measurement_container,
+            model_geometry = model_geometry,
+            correlation = "spin_z",
+            time_displaced = false,
+            integrated = true,
+            pairs = [(1, 1)]
+        )
         # # Measure all possible combinations of bond pairing channels
         # # for the bonds we have defined. We will need each of these
         # # pairs channels measured in order to reconstruct the extended
@@ -512,8 +506,6 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             measurement_container = measurement_container
         )
 
-
-        
         # Initialize variable to keep track of the current burnin bin.
         n_bin_burnin = 1
 
@@ -614,11 +606,11 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     # ## Allocate FermionPathIntegral type for both the spin-up and spin-down electrons.
     fermion_path_integral_up = FermionPathIntegral(tight_binding_parameters = tight_binding_parameters, β = β, Δτ = Δτ)
     fermion_path_integral_dn = FermionPathIntegral(tight_binding_parameters = tight_binding_parameters, β = β, Δτ = Δτ)
-    # @show fermion_path_integral_up
+
     if U != 0
         ## Initialize the FermionPathIntegral type for both the spin-up and spin-down electrons.
-        SmoQyDQMC.initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_parameters)
-        SmoQyDQMC.initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_ising_parameters)
+        initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_parameters)
+        initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_ising_parameters)
     end
     ## Initialize the fermion path integral type with respect to electron-photon interaction.
     initialize!(fermion_path_integral_up, fermion_path_integral_dn, electron_photon_parameters)
@@ -710,8 +702,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     ## Green's function matrices corrected by numerical stabalization.
     δG = zero(typeof(logdetGup))
     δθ = zero(Float64)
-    # @show typeof(sgndetGup)
-    # δθ = 0.0
+
     if iszero(simulation_info.pID)
         elapsed_time = time()-start_time
         @show "Initialization finished!", elapsed_time
@@ -865,6 +856,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
 
             ## Record whether the HMC update was accepted or rejected.
             additional_info["hmc_acceptance_rate"] += accepted
+            
             if U != 0
                 ## Perform a sweep through the lattice, attemping an update to each Ising HS field.
                 (acceptance_rate, logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = local_updates!(
@@ -879,8 +871,17 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
 
                 ## Record the acceptance rate for the attempted local updates to the HS fields.
                 additional_info["local_acceptance_rate"] += acceptance_rate
+                cp_param = (
+                    hubbard_parameters,
+                    hubbard_ising_parameters,
+                    electron_photon_parameters,
+                )
+            else
+                cp_param = (
+                    electron_photon_parameters,
+                )
             end
-            # @show size(Gup),size(Gup_ττ),size(Gup_τ0)
+
             ## Make measurements, with the results being added to the measurement container.
             (logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = make_measurements!(
                 measurement_container,
@@ -892,24 +893,12 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
                 fermion_greens_calculator_dn = fermion_greens_calculator_dn,
                 Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ,
                 model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
-                coupling_parameters = (
-                    hubbard_parameters,
-                    hubbard_ising_parameters,
-                    electron_photon_parameters,
-                )
+                coupling_parameters = cp_param,
             )
         end
         
 
         if iszero(simulation_info.pID)
-        # if true
-            # @show measurement_container.local_measurements
-            # Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
-            # Et/=bin_size
-            # Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
-            # accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
-            # local_accept_ratio = additional_info["local_acceptance_rate"]/(N_burnin + bin*bin_size)
-            # @show simulation_info.pID, bin, bin_size, elapsed_time, accept_ratio, local_accept_ratio, Et,Ek
             elapsed_time = time()-start_time
             @show bin, elapsed_time
         end
@@ -920,7 +909,6 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         Et/=bin_size
         Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
         @show simulation_info.pID,bin,bin_size accept_ratio,local_accept_ratio, Et, Ek
-        # end
 
         ## Write the average measurements for the current bin to file.
         write_measurements!(

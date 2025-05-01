@@ -262,7 +262,7 @@ function hmc_update!(
 
             # record that numerically instability was encountered
             numerically_stable = false
-
+            @error "1. Failed to calculate fermionic action derivative"
             # terminate the HMC trajectory
             break
         end
@@ -272,7 +272,8 @@ function hmc_update!(
 
             # record that numerically instability was encountered
             numerically_stable = false
-
+            @error "2. Numerical instability in fermionic action derivative"
+            @show δG′, logdetGup
             # terminate the HMC trajectory
             break
         end
@@ -320,6 +321,7 @@ function hmc_update!(
     catch
         # record if a numerical instability is encountered
         numerically_stable = false
+        @error "3. Failed to update fermionic action"
     end
 
 
@@ -558,7 +560,7 @@ function hmc_update!(
 
             # record that numerically instability was encountered
             numerically_stable = false
-
+            @error "1. Failed to calculate fermionic action derivative"
             # terminate the HMC trajectory
             break
         end
@@ -568,7 +570,8 @@ function hmc_update!(
 
             # record that numerically instability was encountered
             numerically_stable = false
-
+            @error "2. Numerical instability in fermionic action derivative"
+            @show δG′, logdetGup
             # terminate the HMC trajectory
             break
         end
@@ -610,6 +613,7 @@ function hmc_update!(
     catch
         # record if a numerical instability is encountered
         numerically_stable = false
+        @error "3. Failed to update fermionic action"
     end
 
     # if the simulation remained numerical stable

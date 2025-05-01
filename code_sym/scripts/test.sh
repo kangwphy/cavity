@@ -12,16 +12,16 @@ L=4
 Lx=$L
 Ly=$L
 bt=$L
-U=4
+U=0
 w=1
 mu=0
 N_burnin=0
-N_updates=1200
-N_bins=12
+N_updates=120
+N_bins=1
 
 PBCx=1
 PBCy=1
-prefix=symGauge2
+prefix=test
 eqt_average=false
 tdp_average=false
 
@@ -32,9 +32,9 @@ fi
 
 Nt=8
 at=0.1
-sID=2
-g=10.0
-init=3
+sID=0
+g=2.0
+init=0
 folder=./logs/${prefix}/Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}/g${g}w${w}U${U}mu${mu}Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}avg_${eqt_average}${tdp_average}init${init}
 if [ ! -d $folder ];then
     mkdir -p $folder

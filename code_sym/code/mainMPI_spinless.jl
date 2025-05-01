@@ -365,7 +365,6 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry = model_geometry,
             correlation = "greens_onsite",
             time_displaced = true,
-            # tdp_average = tdp_average,
             pairs = [(1, 1)]
         )
 
@@ -374,7 +373,6 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry = model_geometry,
             correlation = "holegreens_onsite",
             time_displaced = true,
-            # tdp_average = tdp_average,
             pairs = [(1, 1)]
         )
 
@@ -569,12 +567,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     # ## Allocate FermionPathIntegral type for both the spin-up and spin-down electrons.
     fermion_path_integral_up = FermionPathIntegral(tight_binding_parameters = tight_binding_parameters, β = β, Δτ = Δτ)
     # fermion_path_integral_dn = FermionPathIntegral(tight_binding_parameters = tight_binding_parameters, β = β, Δτ = Δτ)
-    # @show fermion_path_integral_up
-    # if U != 0
-    #     ## Initialize the FermionPathIntegral type for both the spin-up and spin-down electrons.
-    #     initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_parameters)
-    #     initialize!(fermion_path_integral_up, fermion_path_integral_dn, hubbard_ising_parameters)
-    # end
+
     ## Initialize the fermion path integral type with respect to electron-photon interaction.
     initialize!(fermion_path_integral_up, electron_photon_parameters)
 
@@ -708,22 +701,6 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             ## Record whether the HMC update was accepted or rejected.
             additional_info["hmc_acceptance_rate"] += accepted
             
-            # if U != 0
-            #     ## Perform a sweep through the lattice, attemping an update to each Ising HS field.
-            #     (acceptance_rate, logdetGup, sgndetGup, δG, δθ) = local_updates!(
-            #         Gup, logdetGup, sgndetGup, Gdn, logdetGdn, sgndetGdn,
-            #         hubbard_ising_parameters,
-            #         fermion_path_integral_up = fermion_path_integral_up,
-            #         fermion_path_integral_dn = fermion_path_integral_dn,
-            #         fermion_greens_calculator_up = fermion_greens_calculator_up,
-            #         fermion_greens_calculator_dn = fermion_greens_calculator_dn,
-            #         Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ, rng = rng
-            #     )
-
-            #     # Record the acceptance rate for the attempted local updates to the HS fields.
-            #     additional_info["local_acceptance_rate"] += acceptance_rate
-            # end
-
             # if iszero(simulation_info.pID)
             #     # # @show additional_info["hmc_acceptance_rate"]/n
             #     # hmcacpt_ratio = additional_info["hmc_acceptance_rate"]/n
@@ -808,22 +785,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
 
             ## Record whether the HMC update was accepted or rejected.
             additional_info["hmc_acceptance_rate"] += accepted
-            # if U != 0
-            #     ## Perform a sweep through the lattice, attemping an update to each Ising HS field.
-            #     (acceptance_rate, logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = local_updates!(
-            #         Gup, logdetGup, sgndetGup, Gdn, logdetGdn, sgndetGdn,
-            #         hubbard_ising_parameters,
-            #         fermion_path_integral_up = fermion_path_integral_up,
-            #         fermion_path_integral_dn = fermion_path_integral_dn,
-            #         fermion_greens_calculator_up = fermion_greens_calculator_up,
-            #         fermion_greens_calculator_dn = fermion_greens_calculator_dn,
-            #         Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ, rng = rng
-            #     )
-
-            #     ## Record the acceptance rate for the attempted local updates to the HS fields.
-            #     additional_info["local_acceptance_rate"] += acceptance_rate
-            # end
-            # @show size(Gup),size(Gup_ττ),size(Gup_τ0)
+       
             ## Make measurements, with the results being added to the measurement container.
             (logdetGup, sgndetGup, δG, δθ) = make_measurements!(
                 measurement_container,
@@ -839,25 +801,18 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
                     electron_photon_parameters,
                 )
             )
-        end
-        
+        end 
 
         if iszero(simulation_info.pID)
-        # if true
-            # @show measurement_container.local_measurements
-            Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
-            Et/=bin_size
-            Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
             elapsed_time = time()-start_time
-            accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
-            @show simulation_info.pID, bin, bin_size, elapsed_time, accept_ratio, Et,Ek
-        else
-            accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
-            Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
-            Et/=bin_size
-            Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
-            @show simulation_info.pID, accept_ratio , Et, Ek
+            @show bin, elapsed_time
         end
+        accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)
+        Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
+        Et/=bin_size
+        Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
+        @show simulation_info.pID,bin,bin_size accept_ratio, Et, Ek
+
         # @show measurement_container.time_displaced_correlations["greens_onsite"]
         ## Write the average measurements for the current bin to file.
         write_measurements!(
