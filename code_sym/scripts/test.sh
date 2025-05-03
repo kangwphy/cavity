@@ -16,11 +16,11 @@ U=0
 w=1
 mu=0
 N_burnin=0
-N_updates=120
+N_updates=1
 N_bins=1
 
-PBCx=1
-PBCy=1
+PBCx=0
+PBCy=0
 prefix=test
 eqt_average=false
 tdp_average=false
@@ -31,9 +31,9 @@ fi
 
 
 Nt=8
-at=0.1
-sID=0
-g=2.0
+at=1
+sID=1
+g=0.0
 init=0
 folder=./logs/${prefix}/Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}/g${g}w${w}U${U}mu${mu}Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}avg_${eqt_average}${tdp_average}init${init}
 if [ ! -d $folder ];then

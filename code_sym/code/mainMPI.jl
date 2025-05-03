@@ -797,6 +797,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry,
             tight_binding_parameters,
             electron_photon_parameters,
+            hubbard_parameters,
+            hubbard_ising_parameters,
             dG = δG, dtheta = δθ, n_stab = n_stab,photon_id=photon_id
         )
         # Make the current checkpoint the old checkpoint.
@@ -932,6 +934,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             model_geometry,
             tight_binding_parameters,
             electron_photon_parameters,
+            hubbard_parameters,
+            hubbard_ising_parameters,
             dG = δG, dtheta = δθ, n_stab = n_stab, photon_id=photon_id
         )
         # Make the current checkpoint the old checkpoint.
