@@ -16,24 +16,23 @@ import SmoQyDQMC.HubbardModel
 
 # Define various electron-photon parameter i.e. given a electron-photon model,
 # define all the parameters in the model given a specific finite lattice size
+# Define various electron-photon parameter i.e. given a electron-photon model,
+# define all the parameters in the model given a specific finite lattice size
 include("ElectronPhoton/ElectronPhotonModel.jl")
 include("ElectronPhoton/ElectronPhotonParameters.jl")
-include("Measurements/initialize_measurements.jl")
-# include("Measurements/initialize_measurements.jl")
-include("Measurements/make_measurements.jl")
-include("Measurements/write_measurements.jl")
-# include("Measurements/process_measurements.jl")
-
 include("ElectronPhoton/EFAHMCUpdater.jl")
 # include("ElectronPhoton/HMCUpdater.jl")
 include("ElectronPhoton/reflection_update.jl")
 
-# include("mydataprocess/mydataprocess.jl")
-# using .mydataprocess
-# include("mydataprocess/process_measurements.jl")
+include("Hubbard/HubbardIsingHS.jl")
+
+include("Measurements/initialize_measurements.jl")
+include("Measurements/make_measurements.jl")
+include("Measurements/write_measurements.jl")
+include("mydataprocess/process_measurements.jl")
+# include("Measurements/process_measurements.jl")
 include("checkconverge.jl")
 
-include("mydataprocess/process_measurements.jl")
 # include("Measurements/process_correlation_measurements.jl")
 # initialize MPI
 # using SmoQyDQMC
@@ -199,11 +198,11 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     # Initialize the Hubbard interaction in the model.
 
     hubbard_model = HubbardModel(
-    shifted = true,
+    shifted = false,
     U_orbital = [1],
     U_mean = [U],
     )
-
+    Nloc = 2
     
 
     ## Initialize a null electron-photon model.
@@ -267,7 +266,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
 
         if iszero(simulation_info.pID)
             @show dir
-            @show Nt,Δt,Nt*Δt,α
+            @show Nt,Δt,Nt*Δt,α,Nloc
         end
 
 
@@ -860,43 +859,69 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
             additional_info["hmc_acceptance_rate"] += accepted
             
             if U != 0
-                ## Perform a sweep through the lattice, attemping an update to each Ising HS field.
-                (acceptance_rate, logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = local_updates!(
-                    Gup, logdetGup, sgndetGup, Gdn, logdetGdn, sgndetGdn,
-                    hubbard_ising_parameters,
-                    fermion_path_integral_up = fermion_path_integral_up,
-                    fermion_path_integral_dn = fermion_path_integral_dn,
-                    fermion_greens_calculator_up = fermion_greens_calculator_up,
-                    fermion_greens_calculator_dn = fermion_greens_calculator_dn,
-                    Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ, rng = rng
-                )
-
-                ## Record the acceptance rate for the attempted local updates to the HS fields.
-                additional_info["local_acceptance_rate"] += acceptance_rate
                 cp_param = (
                     hubbard_parameters,
                     hubbard_ising_parameters,
                     electron_photon_parameters,
                 )
+                ###### use more local update sweeps to stablize the spin correlation ######
+                for n = 1:Nloc
+                    # Perform a sweep through the lattice, attemping an update to each Ising HS field.
+                    # encode the measurement part into the local_updates!
+                    (acceptance_rate, logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = local_updates!(
+                        Gup, logdetGup, sgndetGup, Gdn, logdetGdn, sgndetGdn,
+                        hubbard_ising_parameters,
+                        fermion_path_integral_up = fermion_path_integral_up,
+                        fermion_path_integral_dn = fermion_path_integral_dn,
+                        fermion_greens_calculator_up = fermion_greens_calculator_up,
+                        fermion_greens_calculator_dn = fermion_greens_calculator_dn,
+                        Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ, rng = rng,
+                        measurement_container = measurement_container,
+                        tight_binding_parameters = tight_binding_parameters,
+                        # hubbard_parameters = hubbard_parameters,
+                        coupling_parameters = cp_param,
+                        model_geometry = model_geometry,
+                    )
+                    ## Record the acceptance rate for the attempted local updates to the HS fields.
+                    additional_info["local_acceptance_rate"] += acceptance_rate
+                end
+                #######
+                ## if performed local updates, Lτ times
+                # normalize global measurements by bin size
+                global_measurements = measurement_container.global_measurements
+                normalize_global_measurements!(global_measurements, Nloc*Lτ)
+
+                # normalize local measurements by bin size
+                local_measurements = measurement_container.local_measurements
+                normalize_local_measurements!(local_measurements, Nloc*Lτ)
+
+                # normalize equal-time correlation function measurement
+                equaltime_correlations = measurement_container.equaltime_correlations
+                normalize_correlation_measurements!(equaltime_correlations, Nloc*Lτ)
+
+                # normalize equal-time composite correlation function measurements
+                equaltime_composite_correlations = measurement_container.equaltime_composite_correlations
+                normalize_composite_correlation_measurements!(equaltime_composite_correlations, Nloc*Lτ)
+                ##############
+                # @show sum(measurement_container.local_measurements["hopping_energy"])
             else
                 cp_param = (
                     electron_photon_parameters,
                 )
+                ## Make measurements, with the results being added to the measurement container.
+                (logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = make_measurements!(
+                    measurement_container,
+                    logdetGup, sgndetGup, Gup, Gup_ττ, Gup_τ0, Gup_0τ,
+                    logdetGdn, sgndetGdn, Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
+                    fermion_path_integral_up = fermion_path_integral_up,
+                    fermion_path_integral_dn = fermion_path_integral_dn,
+                    fermion_greens_calculator_up = fermion_greens_calculator_up,
+                    fermion_greens_calculator_dn = fermion_greens_calculator_dn,
+                    Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ,
+                    model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
+                    coupling_parameters = cp_param,
+                )
             end
-
-            ## Make measurements, with the results being added to the measurement container.
-            (logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = make_measurements!(
-                measurement_container,
-                logdetGup, sgndetGup, Gup, Gup_ττ, Gup_τ0, Gup_0τ,
-                logdetGdn, sgndetGdn, Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
-                fermion_path_integral_up = fermion_path_integral_up,
-                fermion_path_integral_dn = fermion_path_integral_dn,
-                fermion_greens_calculator_up = fermion_greens_calculator_up,
-                fermion_greens_calculator_dn = fermion_greens_calculator_dn,
-                Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ,
-                model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
-                coupling_parameters = cp_param,
-            )
         end
         
 
@@ -910,7 +935,8 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         Et = real(sum(measurement_container.local_measurements["hopping_energy"]) + sum(measurement_container.local_measurements["photon_pot_energy"] + measurement_container.local_measurements["photon_kin_energy"])/N)
         Et/=bin_size
         Ek = real(sum(measurement_container.local_measurements["photon_kin_energy"])/bin_size)
-        @show simulation_info.pID,bin,bin_size accept_ratio,local_accept_ratio, Et, Ek
+        DO = real(sum(local_measurements["double_occ"]))
+        @show simulation_info.pID,bin,bin_size accept_ratio,local_accept_ratio, Et, Ek, DO, sgndetGup*sgndetGdn
 
         ## Write the average measurements for the current bin to file.
         write_measurements!(
@@ -979,7 +1005,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     # # # Have the primary MPI process calculate the final error bars for all measurements,
     # # # writing final statisitics to CSV files.
     if iszero(simulation_info.pID)
-        process_measurements(simulation_info.datafolder, 10, time_displaced=false, N_start = 3)
+        process_measurements(simulation_info.datafolder, 50, time_displaced=false, N_start = 11)
     end
 
 

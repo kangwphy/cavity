@@ -1,0 +1,25 @@
+[simulation_info]
+
+name  = "./data/symGauge/Lx4_Ly4_BC00_b4.00/photon_minicoup_square_U1.00_w1.00_g1.80_mu0.00_Lx4_Ly4_BC00_b4.00_eqavg0_tdavg0_init0"
+sID   = 5
+pID   = 0
+smoqydqmc_version = "1.0.16"
+julia_version     = "1.11.2"
+
+[additional_info]
+N_bins = 1
+N_burnin = 0
+N_updates = 1
+Nt = 8
+bin_size = 1
+checkerboard = false
+dG = 4.2744164987104963e-13
+dG_max = 1.0e-6
+dt = 0.039269908169872414
+hmc_acceptance_rate = 1.0
+local_acceptance_rate = 1.8484375
+n_stab_final = 10
+n_stab_init = 10
+reflection_acceptance_rate = 1.0
+seed = 1125308267633384121
+symmetric = false

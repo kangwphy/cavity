@@ -19,7 +19,7 @@ function checkconverge(folder, pIDs, N::Int)
     Eel_mat  = fill(NaN, maxN, length(pIDs))
     Ekin_mat = fill(NaN, maxN, length(pIDs))
     Epot_mat = fill(NaN, maxN, length(pIDs))
-
+    DO_mat = fill(NaN, maxN, length(pIDs))
     for (j, pID) in enumerate(pIDs)
         println("Processing pID = $pID ...")
         ending = @sprintf("*_pID-%d.jld2", pID)
@@ -35,6 +35,7 @@ function checkconverge(folder, pIDs, N::Int)
             Eel_mat[i, j] = real(sum(local_measurements["hopping_energy"]))
             Epot_mat[i, j] = real(sum(local_measurements["photon_pot_energy"]))
             Ekin_mat[i, j] = real(sum(local_measurements["photon_kin_energy"]))
+            DO_mat[i, j] = real(sum(local_measurements["double_occ"]))
         end
     end
 
@@ -53,6 +54,7 @@ function checkconverge(folder, pIDs, N::Int)
     write_matrix_to_csv(Eel_mat,  "Ehop_pID-all.csv")
     write_matrix_to_csv(Ekin_mat, "Ekin_pID-all.csv")
     write_matrix_to_csv(Epot_mat, "Epot_pID-all.csv")
+    write_matrix_to_csv(DO_mat, "DO_pID-all.csv")
 end
 
 

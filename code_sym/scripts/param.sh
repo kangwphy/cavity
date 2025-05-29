@@ -1,6 +1,6 @@
 #!/bin/bash
 sID=1
-g=2.0
+g=6.0
 L=4
 Lx=$L
 Ly=$L
@@ -9,12 +9,12 @@ U=1
 w=1
 mu=0
 N_burnin=0
-N_updates=1200
-N_bins=12
+N_updates=10
+N_bins=1
 
-PBCx=1
-PBCy=1
-prefix=symGauge
+PBCx=0
+PBCy=0
+prefix=test
 eqt_average=false
 tdp_average=false
 

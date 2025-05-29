@@ -313,7 +313,8 @@ function contract_Grr_G00!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i G₂(a,i+r+r₂|b,i+r)⋅G₁(c,i+r₁|d,i)
-            S[r] += αN⁻¹ * G₂_ab[iprpr₂[n],ipr[n]] * G₁_cd[ipr₁[n],i[n]]
+            tmp1 = G₂_ab[iprpr₂[n],ipr[n]] * G₁_cd[ipr₁[n],i[n]]
+            S[r] += αN⁻¹ * tmp1
         end
     end
 
@@ -376,7 +377,10 @@ function contract_Grr_G00!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i η(i+r)⋅η(i)⋅G₂(a,i+r+r₂|b,i+r)⋅G₁(c,i+r₁|d,i)
-            S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[iprpr₂[n],ipr[n]] * G₁_cd[ipr₁[n],i[n]]
+            # S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[iprpr₂[n],ipr[n]] * G₁_cd[ipr₁[n],i[n]]
+            tmp1 = η₂[ipr[n]] * η₁[i[n]]
+            tmp2 = G₂_ab[iprpr₂[n],ipr[n]] * G₁_cd[ipr₁[n],i[n]]
+            S[r] += αN⁻¹ * tmp1 * tmp2
         end
     end
 
@@ -439,7 +443,9 @@ function contract_Grr_G00!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i G₂(a,i+r+r₄|b,i+r+r₃)⋅G₁(c,i+r₂|d,i+r₁)
-            S[r] += αN⁻¹ * G₂_ab[iprpr₄[n],iprpr₃[n]] * G₁_cd[ipr₂[n],ipr₁[n]]
+            # S[r] += αN⁻¹ * G₂_ab[iprpr₄[n],iprpr₃[n]] * G₁_cd[ipr₂[n],ipr₁[n]]
+            tmp1 = G₂_ab[iprpr₄[n],iprpr₃[n]] * G₁_cd[ipr₂[n],ipr₁[n]]
+            S[r] += αN⁻¹ * tmp1
         end
     end
 
@@ -504,7 +510,11 @@ function contract_Grr_G00!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i η₂(i+r)⋅η₁(i)⋅G₂(a,i+r+r₄|b,i+r+r₃)⋅G₁(c,i+r₂|d,i+r₁)
-            S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[iprpr₄[n],iprpr₃[n]] * G₁_cd[ipr₂[n],ipr₁[n]]
+            # S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[iprpr₄[n],iprpr₃[n]] * G₁_cd[ipr₂[n],ipr₁[n]]
+            tmp1 = η₂[ipr[n]] * η₁[i[n]] 
+            tmp2 = G₂_ab[iprpr₄[n],iprpr₃[n]] * G₁_cd[ipr₂[n],ipr₁[n]]
+            S[r] += αN⁻¹ * tmp1 * tmp2
+            
         end
     end
 
@@ -566,7 +576,9 @@ function contract_Gr0_Gr0!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i G₂(a,i+r+r₂|c,i+r₁)⋅G₁(b,i+r|d,i)
-            S[r] += αN⁻¹ * G₂_ac[iprpr₂[n],ipr₁[n]] * G₁_bd[ipr[n],i[n]]
+            # S[r] += αN⁻¹ * G₂_ac[iprpr₂[n],ipr₁[n]] * G₁_bd[ipr[n],i[n]]
+            tmp1 = G₂_ac[iprpr₂[n],ipr₁[n]] * G₁_bd[ipr[n],i[n]]
+            S[r] += αN⁻¹ * tmp1
         end
     end
 
@@ -629,7 +641,10 @@ function contract_Gr0_Gr0!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i η₂(i+r)⋅η₁(i)⋅G₂(a,i+r+r₂|c,i+r₁)⋅G₁(b,i+r|d,i)
-            S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ac[iprpr₂[n],ipr₁[n]] * G₁_bd[ipr[n],i[n]]
+            # S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ac[iprpr₂[n],ipr₁[n]] * G₁_bd[ipr[n],i[n]]
+            tmp1 =  η₂[ipr[n]] * η₁[i[n]]
+            tmp2 = G₂_ac[iprpr₂[n],ipr₁[n]] * G₁_bd[ipr[n],i[n]]
+            S[r] += αN⁻¹ * tmp1 * tmp2
         end
     end
 
@@ -692,7 +707,9 @@ function contract_Gr0_Gr0!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i G₂(a,i+r+r₄|b,i+r₃)⋅G₁(c,i+r+r₂|d,i+r₁)
-            S[r] += αN⁻¹ * G₂_ab[iprpr₄[n],ipr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            # S[r] += αN⁻¹ * G₂_ab[iprpr₄[n],ipr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            tmp1 = G₂_ab[iprpr₄[n],ipr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            S[r] += αN⁻¹ * tmp1
         end
     end
 
@@ -757,7 +774,10 @@ function contract_Gr0_Gr0!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i η₂(i+r)⋅η₁(i)⋅G₂(a,i+r+r₄|b,i+r₃)⋅G₁(c,i+r+r₂|d,i+r₁)
-            S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[iprpr₄[n],ipr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            # S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[iprpr₄[n],ipr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            tmp1 =  η₂[ipr[n]] * η₁[i[n]]
+            tmp2 = G₂_ab[iprpr₄[n],ipr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            S[r] += αN⁻¹ * tmp1 * tmp2
         end
     end
 
@@ -819,7 +839,9 @@ function contract_G0r_Gr0!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i G₂(a,i+r₂|b,i+r)⋅G₁(c,i+r+r₁|d,i)
-            S[r] += αN⁻¹ * G₂_ab[ipr₂[n],ipr[n]] * G₁_cd[iprpr₁[n],i[n]]
+            # S[r] += αN⁻¹ * G₂_ab[ipr₂[n],ipr[n]] * G₁_cd[iprpr₁[n],i[n]]
+            tmp1 = G₂_ab[ipr₂[n],ipr[n]] * G₁_cd[iprpr₁[n],i[n]]
+            S[r] += αN⁻¹ * tmp1
         end
     end
     
@@ -882,7 +904,10 @@ function contract_G0r_Gr0!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i η₂(i+r)⋅η₁(i)⋅G₂(a,i+r₂|b,i+r)⋅G₁(c,i+r+r₁|d,i)
-            S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[ipr₂[n],ipr[n]] * G₁_cd[iprpr₁[n],i[n]]
+            # S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[ipr₂[n],ipr[n]] * G₁_cd[iprpr₁[n],i[n]]
+            tmp1 =  η₂[ipr[n]] * η₁[i[n]]
+            tmp2 = G₂_ab[ipr₂[n],ipr[n]] * G₁_cd[iprpr₁[n],i[n]]
+            S[r] += αN⁻¹ * tmp1 * tmp2
         end
     end
     
@@ -945,7 +970,9 @@ function contract_G0r_Gr0!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i G₂(a,i+r₄|b,i+r+r₃)⋅G₁(c,i+r+r₂|d,i+r₁)
-            S[r] += αN⁻¹ * G₂_ab[ipr₄[n],iprpr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            # S[r] += αN⁻¹ * G₂_ab[ipr₄[n],iprpr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            tmp1 = G₂_ab[ipr₄[n],iprpr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            S[r] += αN⁻¹ * tmp1
         end
     end
 
@@ -1010,7 +1037,10 @@ function contract_G0r_Gr0!(
         # average over translation symmetry
         for n in CartesianIndices(S)
             # S(r) = S(r) + α/N sum_i η₂(i+r)⋅η₁(i)⋅G₂(a,i+r₄|b,i+r+r₃)⋅G₁(c,i+r+r₂|d,i+r₁)
-            S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[ipr₄[n],iprpr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            # S[r] += αN⁻¹ * η₂[ipr[n]] * η₁[i[n]] * G₂_ab[ipr₄[n],iprpr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            tmp1 =  η₂[ipr[n]] * η₁[i[n]]
+            tmp2 = G₂_ab[ipr₄[n],iprpr₃[n]] * G₁_cd[iprpr₂[n],ipr₁[n]]
+            S[r] += αN⁻¹ * tmp1 * tmp2
         end
     end
 
