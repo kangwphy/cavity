@@ -1,10 +1,9 @@
 include("CorrelationContainer.jl")
 include("CompositeCorrelationContainer.jl")
-include("measurement_names.jl")
+# include("measurement_names.jl")
 ######################################
 ## INITIALIZE MEASUREMENT CONTAINER ##
 ######################################
-
 @doc raw"""
     initialize_measurement_container(
         model_geometry::ModelGeometry{D,T,N},

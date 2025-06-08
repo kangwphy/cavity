@@ -864,11 +864,10 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
                         fermion_path_integral = fermion_path_integral,
                         fermion_greens_calculator = fermion_greens_calculator,
                         B = B, δG_max = δG_max, δG = δG, δθ = δθ, rng = rng,
-                        measurement_container = measurement_container,
-                        tight_binding_parameters = tight_binding_parameters,
-                        # hubbard_parameters = hubbard_parameters,
-                        coupling_parameters = cp_param,
-                        model_geometry = model_geometry,
+                        # measurement_container = measurement_container,
+                        # tight_binding_parameters = tight_binding_parameters,
+                        # coupling_parameters = cp_param,
+                        # model_geometry = model_geometry,
                     )
                     ## Record the acceptance rate for the attempted local updates to the HS fields.
                     additional_info["local_acceptance_rate"] += acceptance_rate
@@ -889,31 +888,42 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
                     coupling_parameters = cp_param
                 )
             end
+            (logdetG, sgndetG, δG, δθ) = make_measurements!(
+                measurement_container,
+                logdetG, sgndetG, G, G_ττ, G_τ0, G_0τ,
+                fermion_path_integral = fermion_path_integral,
+                fermion_greens_calculator = fermion_greens_calculator,
+                B = B, δG_max = δG_max, δG = δG, δθ = δθ,
+                model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
+                coupling_parameters = cp_param
+            )
+            
             t3 = time()
             tc += t3-t2
         end
         t_bin = ta+tb+tc    
+        
 
-        if U!=0
-            #######
-            ## if performed local updates, Lτ times
-            # normalize global measurements by bin size
-            global_measurements = measurement_container.global_measurements
-            normalize_global_measurements!(global_measurements, Nloc*Lτ)
+        # if U!=0
+        #     #######
+        #     ## if performed local updates, Lτ times
+        #     # normalize global measurements by bin size
+        #     global_measurements = measurement_container.global_measurements
+        #     normalize_global_measurements!(global_measurements, Nloc*Lτ)
 
-            # normalize local measurements by bin size
-            local_measurements = measurement_container.local_measurements
-            normalize_local_measurements!(local_measurements, Nloc*Lτ)
+        #     # normalize local measurements by bin size
+        #     local_measurements = measurement_container.local_measurements
+        #     normalize_local_measurements!(local_measurements, Nloc*Lτ)
 
-            # normalize equal-time correlation function measurement
-            equaltime_correlations = measurement_container.equaltime_correlations
-            normalize_correlation_measurements!(equaltime_correlations, Nloc*Lτ)
+        #     # normalize equal-time correlation function measurement
+        #     equaltime_correlations = measurement_container.equaltime_correlations
+        #     normalize_correlation_measurements!(equaltime_correlations, Nloc*Lτ)
 
-            # normalize equal-time composite correlation function measurements
-            equaltime_composite_correlations = measurement_container.equaltime_composite_correlations
-            normalize_composite_correlation_measurements!(equaltime_composite_correlations, Nloc*Lτ)
-            ##############
-        end
+        #     # normalize equal-time composite correlation function measurements
+        #     equaltime_composite_correlations = measurement_container.equaltime_composite_correlations
+        #     normalize_composite_correlation_measurements!(equaltime_composite_correlations, Nloc*Lτ)
+        #     ##############
+        # end
 
         if iszero(simulation_info.pID)
             elapsed_time = time()-start_time

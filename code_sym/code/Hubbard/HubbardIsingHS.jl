@@ -1,5 +1,3 @@
-import SmoQyDQMC.local_updates!
-
 @doc raw"""
     HubbardIsingHSParameters{T<:AbstractFloat}
 
@@ -36,7 +34,7 @@ struct HubbardIsingHSParameters{T<:AbstractFloat}
     U::Vector{T}
     
     # cosh(α) = exp(Δτ|U|/2)
-    α::Vector{T}
+    α::Vector
 
     # site index associated with each Hubbard U
     sites::Vector{Int}
@@ -46,6 +44,10 @@ struct HubbardIsingHSParameters{T<:AbstractFloat}
 
     # order in which to iterate over orbitals when updating Hubbard-Stratonovich fields.
     update_perm::Vector{Int}
+
+    # decouple channel, either "d" for decoupling in the density cahnenl or "s" for decoupling in the spin channel
+    channel::String
+
 end
 
 
@@ -61,7 +63,7 @@ function HubbardIsingHSParameters(; β::E, Δτ::E,
                                   hubbard_parameters::HubbardParameters{E},
                                   rng::AbstractRNG) where {E<:AbstractFloat}
 
-    (; U, sites) = hubbard_parameters
+    (; U, sites, channel) = hubbard_parameters
 
     # calcualte length of imaginary time axis
     Lτ = eval_length_imaginary_axis(β, Δτ)
@@ -70,8 +72,24 @@ function HubbardIsingHSParameters(; β::E, Δτ::E,
     N = length(U)
 
     # calculate α constant for each Hubbard U, given by cosh(α) = exp(Δτ⋅|U|/2)
-    α = similar(U)
-    @. α = acosh(exp(Δτ*abs(U)/2))
+    if channel == "d"
+        α = acosh.(
+        ifelse.(exp.(-Δτ .* U ./ 2) .>= 1,
+                exp.(-Δτ .* U ./ 2),
+                complex.(exp.(-Δτ .* U ./ 2))
+        )
+        )
+    elseif channel == "s"
+        α = acosh.(
+        ifelse.(exp.(Δτ .* U ./ 2) .>= 1,
+                exp.(Δτ .* U ./ 2),
+                complex.(exp.(Δτ .* U ./ 2))
+        )
+        )
+    else
+        throw(ArgumentError("Invalid channel type: $channel. Must be 'd' or 's'."))
+    end
+    
 
     # initialize HS fields
     s = rand(rng, -1:2:1, N, Lτ)
@@ -79,7 +97,7 @@ function HubbardIsingHSParameters(; β::E, Δτ::E,
     # initialize update permuation order
     update_perm = collect(1:N)
 
-    return HubbardIsingHSParameters(β, Δτ, Lτ, N, U, α, sites, s, update_perm)
+    return HubbardIsingHSParameters(β, Δτ, Lτ, N, U, α, sites, s, update_perm, channel)
 end
 
 
@@ -95,7 +113,7 @@ function initialize!(fermion_path_integral_up::FermionPathIntegral{T,E},
                      fermion_path_integral_dn::FermionPathIntegral{T,E},
                      hubbard_ising_parameters::HubbardIsingHSParameters{E}) where {T,E}
     
-    (; α, U, Δτ, s, sites) = hubbard_ising_parameters
+    (; α, U, Δτ, s, sites, channel) = hubbard_ising_parameters
     Vup = fermion_path_integral_up.V
     Vdn = fermion_path_integral_dn.V
 
@@ -104,7 +122,15 @@ function initialize!(fermion_path_integral_up::FermionPathIntegral{T,E},
         for i in eachindex(sites)
             site = sites[i]
             Vup[site,l] = Vup[site,l] - α[i]/Δτ * s[i,l]
-            Vdn[site,l] = Vdn[site,l] + sign(U[i]) * α[i]/Δτ * s[i,l]
+            if channel == "d"
+                # for density channel, the spin-down HS field contribution is opposite
+                Vdn[site,l] = Vdn[site,l] - α[i]/Δτ * s[i,l]
+            elseif channel == "s"
+                # for spin channel, the spin-down HS field contribution is the same
+                Vdn[site,l] = Vdn[site,l] + α[i]/Δτ * s[i,l]
+            else
+                throw(ArgumentError("Invalid channel type: $channel. Must be 'd' or 's'."))
+            end
         end
     end
 
@@ -122,11 +148,12 @@ instance `fermion_path_integral`.
 function initialize!(fermion_path_integral::FermionPathIntegral{T,E},
                      hubbard_ising_parameters::HubbardIsingHSParameters{E}) where {T,E}
     
-    (; α, U, Δτ, s, sites) = hubbard_ising_parameters
+    (; α, U, Δτ, s, sites, channel) = hubbard_ising_parameters
     V = fermion_path_integral.V
 
     # make sure its a strictly attractive hubbard interaction
-    @assert all(u -> u < 0.0, U)
+    # @assert all(u -> u < 0.0, U)
+    @assert channel == "d" "HubbardIsingHSParameters must be initialized with channel=\"d\" for strictly attractive Hubbard interactions."
 
     # add Ising HS field contribution to diagonal on-site energy matrices
     for l in axes(V,2)
@@ -196,20 +223,21 @@ function local_updates!(
     δG::E, δθ::E,  rng::AbstractRNG,
     δG_max::E = 1e-5,
     update_stabilization_frequency::Bool = true,
-    measurement_container::NamedTuple,
-    tight_binding_parameters::TightBindingParameters{T,E},
-    coupling_parameters,
-    model_geometry,
+    measurement_container::Union{Nothing, NamedTuple} = nothing,
+    tight_binding_parameters::Union{Nothing, TightBindingParameters{T,E}} = nothing,
+    coupling_parameters::Union{Nothing, Any} = nothing,
+    model_geometry::Union{Nothing, Any} = nothing
 ) where {T<:Number, E<:AbstractFloat, P<:AbstractPropagator{T,E}}
 
     Δτ          = hubbard_ising_parameters.Δτ::E
     U           = hubbard_ising_parameters.U::Vector{E}
-    α           = hubbard_ising_parameters.α::Vector{E}
+    α           = hubbard_ising_parameters.α::Vector
     sites       = hubbard_ising_parameters.sites::Vector{Int}
     s           = hubbard_ising_parameters.s::Matrix{Int}
     update_perm = hubbard_ising_parameters.update_perm::Vector{Int}
     u           = fermion_path_integral_up.u::Vector{T}
     v           = fermion_path_integral_dn.v::Vector{T}
+    channel     = hubbard_ising_parameters.channel::String
 
     # get temporary storage matrix
     G′ = fermion_greens_calculator_up.G′::Matrix{T}
@@ -223,10 +251,10 @@ function local_updates!(
 
     # counter for the number of accepted spin flips
     accepted_spin_flips = 0
-    
+
     # Iterate over imaginary time τ=Δτ⋅l.
     for l in fermion_greens_calculator_up
-        st = time()
+
         # Propagate equal-time Green's function matrix to current imaginary time G(τ±Δτ,τ±Δτ) ==> G(τ,τ)
         # depending on whether iterating over imaginary time in the forward or reverse direction
         propagate_equaltime_greens!(Gup, fermion_greens_calculator_up, Bup)
@@ -252,7 +280,7 @@ function local_updates!(
             proposed_spin_flips += 1
 
             # calculate the change in the bosonic action, only non-zero for attractive hubbard interactions
-            if U[i] < 0.0
+            if channel == "d"
                 ΔSb_il = -2 * α[i] * s[i,l] # (α⋅[-s]) - (α⋅[s])
             else
                 ΔSb_il = 0.0
@@ -264,7 +292,8 @@ function local_updates!(
             # calculate new value of Vup[i,l] and Vdn[i,l] resulting from the
             # Ising HS field having its sign flipped s[i,l] ==> -s[i,l]
             Vup_il′ = -2 *              α[i]/Δτ * (-s[i,l]) + Vup[site,l]
-            Vdn_il′ = +2 * sign(U[i]) * α[i]/Δτ * (-s[i,l]) + Vdn[site,l]
+            Vdn_il′  = (channel == "s" ? 1 : channel == "d" ? -1 : error("Invalid channel: must be \"s\" or \"d\"")) * 2 * α[i] / Δτ * (-s[i,l]) + Vdn[site, l]
+
 
             # calculate spin-up determinant ratio associated with Ising HS spin flip
             Rup_il, Δup_il = local_update_det_ratio(Gup, Bup_l, Vup_il′, site, Δτ)
@@ -289,45 +318,56 @@ function local_updates!(
                 # update the spin-up and down Green's function
                 logdetGup, sgndetGup = local_update_greens!(Gup, logdetGup, sgndetGup, Bup_l, Rup_il, Δup_il, site, u, v)
                 logdetGdn, sgndetGdn = local_update_greens!(Gdn, logdetGdn, sgndetGdn, Bdn_l, Rdn_il, Δdn_il, site, u, v)
+                if channel == "d"
+                    sgndetGup *= sign(exp(-ΔSb_il/2))
+                    sgndetGdn *= sign(exp(-ΔSb_il/2))
+                end
             end
         end
-
+        # @show "a",sgndetGup,sgndetGdn
         # apply the transformation G(τ,τ) = exp(-Δτ⋅K[l]/2)⋅G̃(τ,τ)⋅exp(+Δτ⋅K[l]/2)
         # if B[l] = exp(-Δτ⋅K[l]/2)⋅exp(-Δτ⋅V[l])⋅exp(-Δτ⋅K[l]/2),
         # otherwise nothing when B[l] = exp(-Δτ⋅V[l])⋅exp(-Δτ⋅K[l])
         SmoQyDQMC.reverse_partially_wrap_greens(Gup, Bup_l, G′)
         SmoQyDQMC.reverse_partially_wrap_greens(Gdn, Bdn_l, G′)
 
-        # Periodically re-calculate the Green's function matrix for numerical stability.
-        logdetGup, sgndetGup, δGup, δθup = stabilize_equaltime_greens!(Gup, logdetGup, sgndetGup, fermion_greens_calculator_up, Bup, update_B̄=true)
-        logdetGdn, sgndetGdn, δGdn, δθdn = stabilize_equaltime_greens!(Gdn, logdetGdn, sgndetGdn, fermion_greens_calculator_dn, Bdn, update_B̄=true)
+        
+        sgn0 = (ifelse(channel == "d", sign(exp(α[1] * sum(s)/2)), 1.0))
 
+        # Periodically re-calculate the Green's function matrix for numerical stability.
+        logdetGup, sgndetGup, δGup, δθup = stabilize_equaltime_greens!(Gup, logdetGup, sgndetGup, fermion_greens_calculator_up, Bup, update_B̄=true, sgn0 = sgn0)
+        logdetGdn, sgndetGdn, δGdn, δθdn = stabilize_equaltime_greens!(Gdn, logdetGdn, sgndetGdn, fermion_greens_calculator_dn, Bdn, update_B̄=true, sgn0 = sgn0)
+        
         # record the max errors
         δG = maximum((δG, δGup, δGdn))
         δθ = maximum(abs, (δθ, δθup, δθdn))
-        ut = time()
-        # @show l,"update",ut-st
-        ## Make measurements, with the results being added to the measurement container.
-        Gup_ττ = similar(Gup) # G↑(τ,τ)
-        Gup_τ0 = similar(Gup) # G↑(τ,0)
-        Gup_0τ = similar(Gup) # G↑(0,τ)
-        Gdn_ττ = similar(Gdn) # G↓(τ,τ)
-        Gdn_τ0 = similar(Gdn) # G↓(τ,0)
-        Gdn_0τ = similar(Gdn) # G↓(0,τ)
-        (logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = make_equal_measurements!(
-            measurement_container,
-            logdetGup, sgndetGup, Gup, Gup_ττ, Gup_τ0, Gup_0τ,
-            logdetGdn, sgndetGdn, Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
-            fermion_path_integral_up = fermion_path_integral_up,
-            fermion_path_integral_dn = fermion_path_integral_dn,
-            fermion_greens_calculator_up = fermion_greens_calculator_up,
-            fermion_greens_calculator_dn = fermion_greens_calculator_dn,
-            Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ,
-            model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
-            coupling_parameters = coupling_parameters,
-        )
-        mt = time()
-        # @show l,"mea",mt-ut
+        # @show sgndetGup,sgndetGdn,δθ
+        if measurement_container !== nothing &&
+            tight_binding_parameters !== nothing &&
+            coupling_parameters !== nothing &&
+            model_geometry !== nothing
+         
+            Gup_ττ = similar(Gup) # G↑(τ,τ)
+            Gup_τ0 = similar(Gup) # G↑(τ,0)
+            Gup_0τ = similar(Gup) # G↑(0,τ)
+            Gdn_ττ = similar(Gdn) # G↓(τ,τ)
+            Gdn_τ0 = similar(Gdn) # G↓(τ,0)
+            Gdn_0τ = similar(Gdn) # G↓(0,τ)
+            (logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ) = make_static_measurements!(
+                measurement_container,
+                logdetGup, sgndetGup, Gup, Gup_ττ, Gup_τ0, Gup_0τ,
+                logdetGdn, sgndetGdn, Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
+                fermion_path_integral_up = fermion_path_integral_up,
+                fermion_path_integral_dn = fermion_path_integral_dn,
+                fermion_greens_calculator_up = fermion_greens_calculator_up,
+                fermion_greens_calculator_dn = fermion_greens_calculator_dn,
+                Bup = Bup, Bdn = Bdn, δG_max = δG_max, δG = δG, δθ = δθ,
+                model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
+                coupling_parameters = coupling_parameters
+            )
+         
+        end
+
         # keep spin-up and spin-down sectors synchronized
         iterate(fermion_greens_calculator_dn, fermion_greens_calculator_up.forward)
     end
@@ -342,7 +382,7 @@ function local_updates!(
             Bup = Bup, Bdn = Bdn, δG = δG, δθ = δθ, δG_max = δG_max
         )
     end
-
+    
     # calculate the acceptance rate
     acceptance_rate = accepted_spin_flips / proposed_spin_flips
 
@@ -391,10 +431,14 @@ function local_updates!(
     fermion_greens_calculator::FermionGreensCalculator{T,E},
     B::Vector{P}, δG::E, δθ::E, rng::AbstractRNG,
     δG_max::E = 1e-5,
-    update_stabilization_frequency::Bool = true
+    update_stabilization_frequency::Bool = true,
+    measurement_container::Union{Nothing, NamedTuple} = nothing,
+    tight_binding_parameters::Union{Nothing, TightBindingParameters{T,E}} = nothing,
+    coupling_parameters::Union{Nothing, Any} = nothing,
+    model_geometry::Union{Nothing, Any} = nothing
 ) where {T<:Number, E<:AbstractFloat, P<:AbstractPropagator{T,E}}
 
-    (; update_perm, U, α, sites, s, Δτ) = hubbard_ising_parameters
+    (; update_perm, U, α, sites, s, Δτ, channel) = hubbard_ising_parameters
     (; u, v) = fermion_path_integral
 
     # get temporary storage matrix
@@ -442,7 +486,8 @@ function local_updates!(
             # calculate spin-up determinant ratio associated with Ising HS spin flip
             R_il, Δ_il = local_update_det_ratio(G, B[l], V_il′, site, Δτ)
             # calculate acceptance probability
-            P_il = exp(-ΔSb_il) * abs2(R_il)
+            # P_il = exp(-ΔSb_il) * abs2(R_il)
+            P_il = abs(exp(-ΔSb_il) * (R_il)* (R_il))
 
             # accept or reject proposed upate
             if rand(rng) < P_il
@@ -458,6 +503,9 @@ function local_updates!(
 
                 # update the spin-up and down Green's function
                 logdetG, sgndetG = local_update_greens!(G, logdetG, sgndetG, B[l], R_il, Δ_il, site, u, v)
+                if channel == "d"
+                    sgndetG *= sign(exp(-ΔSb_il/2))
+                end
             end
         end
 
@@ -466,12 +514,36 @@ function local_updates!(
         # otherwise nothing when B[l] = exp(-Δτ⋅V[l])⋅exp(-Δτ⋅K[l])
         SmoQyDQMC.reverse_partially_wrap_greens(G, B[l], G′)
 
+        sgn0 = (ifelse(channel == "d", sign(exp(α[1] * sum(s)/2)), 1.0))
+
         # Periodically re-calculate the Green's function matrix for numerical stability.
-        logdetG, sgndetG, δG′, δθ′ = stabilize_equaltime_greens!(G, logdetG, sgndetG, fermion_greens_calculator, B, update_B̄=true)
+        logdetG, sgndetG, δG′, δθ′ = stabilize_equaltime_greens!(G, logdetG, sgndetG, fermion_greens_calculator, B, update_B̄=true,sgn0=sgn0)
 
         # record the max errors
         δG = maximum((δG, δG′))
         δθ = maximum(abs, (δθ, δθ′))
+        # @show sgndetG,δθ
+        ###### make equaltime measurements for each time slices ######
+        if measurement_container !== nothing &&
+            tight_binding_parameters !== nothing &&
+            coupling_parameters !== nothing &&
+            model_geometry !== nothing
+         
+            G_ττ = similar(G) # G↑(τ,τ)
+            G_τ0 = similar(G) # G↑(τ,0)
+            G_0τ = similar(G) # G↑(0,τ)
+
+            (logdetG, sgndetG, δG, δθ) = make_static_measurements!(
+                measurement_container,
+                logdetG, sgndetG, G, G_ττ, G_τ0, G_0τ,
+                fermion_path_integral = fermion_path_integral,
+                fermion_greens_calculator = fermion_greens_calculator,
+                B = B, δG_max = δG_max, δG = δG, δθ = δθ,
+                model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
+                coupling_parameters = coupling_parameters
+            )
+         
+         end
     end
 
     # update stabilization frequency if required

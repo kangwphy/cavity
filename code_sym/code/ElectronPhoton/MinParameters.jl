@@ -211,6 +211,8 @@ function MinParameters(;
 
             end
             # @show PBCx
+            Lx = model_geometry.lattice.L[1]
+            Ly = model_geometry.lattice.L[2]
             if PBCx != 1
                 for y in 1:Ly
                     n = Lx + (y-1)*Lx

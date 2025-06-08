@@ -225,6 +225,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
 
         ## Initialize a random number generator that will be used throughout the simulation.
         seed = abs(rand(Int))
+        seed = 1234
         rng = Xoshiro(seed)
 
         ## Number of fermionic time-steps in HMC update.
@@ -802,6 +803,7 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
     ## Green's function matrices corrected by numerical stabalization.
     δG = zero(typeof(logdetG))
     δθ = zero(Float64)
+    # δθ = zero(typeof(sgndetG))
 
     ## Iterate over the number of bin, i.e. the number of time measurements will be dumped to file.
     for bin in n_bin:N_bins
@@ -811,42 +813,42 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
         ## Iterate over the number of updates and measurements performed in the current bin.
         for n in 1:bin_size
             t0 = time()
-            ## Perform a reflection update.
-            (accepteda, logdetG, sgndetG) = reflection_update!(
-                G, logdetG, sgndetG,
-                electron_photon_parameters,
-                fermion_path_integral = fermion_path_integral,
-                fermion_greens_calculator = fermion_greens_calculator,
-                fermion_greens_calculator_alt = fermion_greens_calculator_alt,
-                B = B, rng = rng, photon_types = (photon_id,)
-            )
+            # ## Perform a reflection update.
+            # (accepteda, logdetG, sgndetG) = reflection_update!(
+            #     G, logdetG, sgndetG,
+            #     electron_photon_parameters,
+            #     fermion_path_integral = fermion_path_integral,
+            #     fermion_greens_calculator = fermion_greens_calculator,
+            #     fermion_greens_calculator_alt = fermion_greens_calculator_alt,
+            #     B = B, rng = rng, photon_types = (photon_id,)
+            # )
 
-            ## Record whether the reflection update was accepted or rejected.
-            additional_info["reflection_acceptance_rate"] += accepteda
-            t1 = time()
-            ta += t1-t0
+            # ## Record whether the reflection update was accepted or rejected.
+            # additional_info["reflection_acceptance_rate"] += accepteda
+            # t1 = time()
+            # ta += t1-t0
             
             ## Perform an HMC update.
-            (acceptedb, logdetG, sgndetG, δG, δθ) = hmc_update!(
-                G, logdetG, sgndetG,
-                electron_photon_parameters,
-                hmc_updater,
-                fermion_path_integral = fermion_path_integral,
-                fermion_greens_calculator = fermion_greens_calculator,
-                fermion_greens_calculator_alt = fermion_greens_calculator_alt,
-                B = B,
-                δG_max = δG_max, δG = δG, δθ = δθ, rng = rng
-            )
+            # (acceptedb, logdetG, sgndetG, δG, δθ) = hmc_update!(
+            #     G, logdetG, sgndetG,
+            #     electron_photon_parameters,
+            #     hmc_updater,
+            #     fermion_path_integral = fermion_path_integral,
+            #     fermion_greens_calculator = fermion_greens_calculator,
+            #     fermion_greens_calculator_alt = fermion_greens_calculator_alt,
+            #     B = B,
+            #     δG_max = δG_max, δG = δG, δθ = δθ, rng = rng
+            # )
 
-            ## Record whether the HMC update was accepted or rejected.
-            additional_info["hmc_acceptance_rate"] += acceptedb
-            t2 = time()
-            tb += t2-t1
+            # ## Record whether the HMC update was accepted or rejected.
+            # additional_info["hmc_acceptance_rate"] += acceptedb
+            # t2 = time()
+            # tb += t2-t1
 
-            if hubbard_ising_parameters.channel == "d" && (accepteda || acceptedb)
-                weight = exp(hubbard_ising_parameters.α[1] * sum(hubbard_ising_parameters.s)/2)
-                sgndetG *= sign(weight)
-            end
+            # if hubbard_ising_parameters.channel == "d" && (accepteda || acceptedb)
+            #     weight = exp(hubbard_ising_parameters.α[1] * sum(hubbard_ising_parameters.s)/2)
+            #     sgndetG *= sign(weight)
+            # end
 
             if U != 0
                 cp_param = (
@@ -864,16 +866,16 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
                         fermion_path_integral = fermion_path_integral,
                         fermion_greens_calculator = fermion_greens_calculator,
                         B = B, δG_max = δG_max, δG = δG, δθ = δθ, rng = rng,
-                        measurement_container = measurement_container,
-                        tight_binding_parameters = tight_binding_parameters,
-                        # hubbard_parameters = hubbard_parameters,
-                        coupling_parameters = cp_param,
-                        model_geometry = model_geometry,
+                        # measurement_container = measurement_container,
+                        # tight_binding_parameters = tight_binding_parameters,
+                        # # hubbard_parameters = hubbard_parameters,
+                        # coupling_parameters = cp_param,
+                        # model_geometry = model_geometry,
                     )
                     ## Record the acceptance rate for the attempted local updates to the HS fields.
                     additional_info["local_acceptance_rate"] += acceptance_rate
                 end
-              
+   
             else
                 cp_param = (
                     electron_photon_parameters,
@@ -889,35 +891,45 @@ function run_photon_minicoup_square_simulation(sID, U, Ω, g, μ, β, Lx, Ly, PB
                     coupling_parameters = cp_param
                 )
             end
+            (logdetG, sgndetG, δG, δθ) = make_measurements!(
+                measurement_container,
+                logdetG, sgndetG, G, G_ττ, G_τ0, G_0τ,
+                fermion_path_integral = fermion_path_integral,
+                fermion_greens_calculator = fermion_greens_calculator,
+                B = B, δG_max = δG_max, δG = δG, δθ = δθ,
+                model_geometry = model_geometry, tight_binding_parameters = tight_binding_parameters,
+                coupling_parameters = cp_param
+            )
+            
             t3 = time()
-            tc += t3-t2
+            tc += t3-t0
         end
-        t_bin = ta+tb+tc    
+        t_bin = tc  
+        
+        # if U!=0
+        #     #######
+        #     ## if performed local updates, Lτ times
+        #     # normalize global measurements by bin size
+        #     global_measurements = measurement_container.global_measurements
+        #     normalize_global_measurements!(global_measurements, Nloc*Lτ)
 
-        if U!=0
-            #######
-            ## if performed local updates, Lτ times
-            # normalize global measurements by bin size
-            global_measurements = measurement_container.global_measurements
-            normalize_global_measurements!(global_measurements, Nloc*Lτ)
+        #     # normalize local measurements by bin size
+        #     local_measurements = measurement_container.local_measurements
+        #     normalize_local_measurements!(local_measurements, Nloc*Lτ)
 
-            # normalize local measurements by bin size
-            local_measurements = measurement_container.local_measurements
-            normalize_local_measurements!(local_measurements, Nloc*Lτ)
+        #     # normalize equal-time correlation function measurement
+        #     equaltime_correlations = measurement_container.equaltime_correlations
+        #     normalize_correlation_measurements!(equaltime_correlations, Nloc*Lτ)
 
-            # normalize equal-time correlation function measurement
-            equaltime_correlations = measurement_container.equaltime_correlations
-            normalize_correlation_measurements!(equaltime_correlations, Nloc*Lτ)
-
-            # normalize equal-time composite correlation function measurements
-            equaltime_composite_correlations = measurement_container.equaltime_composite_correlations
-            normalize_composite_correlation_measurements!(equaltime_composite_correlations, Nloc*Lτ)
-            ##############
-        end
+        #     # normalize equal-time composite correlation function measurements
+        #     equaltime_composite_correlations = measurement_container.equaltime_composite_correlations
+        #     normalize_composite_correlation_measurements!(equaltime_composite_correlations, Nloc*Lτ)
+        #     ##############
+        # end
 
         if iszero(simulation_info.pID)
             elapsed_time = time()-start_time
-            @show bin, elapsed_time,t_bin, ta, tb, tc
+            @show bin, elapsed_time,t_bin
         end
 
         accept_ratio = additional_info["hmc_acceptance_rate"]/(N_burnin + bin*bin_size)

@@ -5,12 +5,13 @@ include("src/myJDQMCMeasurements.jl")
 # using JDQMCMeasurements
 # export myJDQMCMeasurements
 using .myJDQMCMeasurements
-include("../ElectronPhoton/photon_measurements.jl")
-include("../ElectronPhoton/min_measurements.jl")
+
+
 # include("src/correlation_measurements/current_correlation.jl")
 ############start by kangw May 22, 2025 ##############
+
 @doc raw"""
-    make_measurements!(
+    make_static_measurements!(
         measurement_container::NamedTuple,
         logdetGup::E, sgndetGup::T, Gup::AbstractMatrix{T},
         Gup_ττ::AbstractMatrix{T}, Gup_τ0::AbstractMatrix{T}, Gup_0τ::AbstractMatrix{T},
@@ -30,12 +31,12 @@ include("../ElectronPhoton/min_measurements.jl")
         δG::E, δθ::E, δG_max::E = 1e-6
     ) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
 
-Make measurements, including time-displaced correlation and zero Matsubara frequency measurements.
+Make simplified measurements in local updates.
 This method also returns `(logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ)`.
 Note that either the keywork `tight_binding_parameters` needs to be specified, or
 `tight_binding_parameters_up` and `tight_binding_parameters_dn` both need to be specified.
 """
-function make_equal_measurements!(
+function make_static_measurements!(
     measurement_container::NamedTuple,
     logdetGup::E, sgndetGup::T, Gup::AbstractMatrix{T},
     Gup_ττ::AbstractMatrix{T}, Gup_τ0::AbstractMatrix{T}, Gup_0τ::AbstractMatrix{T},
@@ -54,7 +55,7 @@ function make_equal_measurements!(
     coupling_parameters::Tuple,
     δG::E, δθ::E, δG_max::E = 1e-6
 ) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
-
+    l₀ = fermion_greens_calculator_up.l
     # extract temporary storage vectors
     (; 
         time_displaced_correlations,
@@ -94,7 +95,7 @@ function make_equal_measurements!(
         model_geometry,
         tight_binding_parameters_up, tight_binding_parameters_dn,
         fermion_path_integral_up, fermion_path_integral_dn,
-        coupling_parameters
+        coupling_parameters,l₀
     )
 
     # initialize green's function matrices G(τ,0), G(0,τ) and G(τ,τ) based on G(0,0)
@@ -107,7 +108,7 @@ function make_equal_measurements!(
         Gup, Gup_ττ, Gup_τ0, Gup_0τ,
         Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
         model_geometry, tight_binding_parameters_up, tight_binding_parameters_dn,
-        fermion_path_integral_up, fermion_path_integral_dn
+        fermion_path_integral_up, fermion_path_integral_dn, l₀
     )
 
     # make equal-time composite correlation measurements
@@ -122,7 +123,101 @@ function make_equal_measurements!(
  
     return (logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ)
 end
+
+
+
+@doc raw"""
+    make_static_measurements!(
+        measurement_container::NamedTuple,
+        logdetG::E, sgndetG::T, G::AbstractMatrix{T},
+        G_ττ::AbstractMatrix{T}, G_τ0::AbstractMatrix{T}, G_0τ::AbstractMatrix{T};
+        # Keyword Arguments Start Here
+        fermion_path_integral::FermionPathIntegral{T,E},
+        fermion_greens_calculator::FermionGreensCalculator{T,E},
+        B::Vector{P},
+        model_geometry::ModelGeometry{D,E,N},
+        tight_binding_parameters::TightBindingParameters{T,E},
+        coupling_parameters::Tuple,
+        δG::E, δθ::E, δG_max::E = 1e-6
+    ) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
+
+Make simplified measurements in loccal updates.
+This method also returns `(logdetG, sgndetG, δG, δθ)`.
+"""
+function make_static_measurements!(
+    measurement_container::NamedTuple,
+    logdetG::E, sgndetG::T, G::AbstractMatrix{T},
+    G_ττ::AbstractMatrix{T}, G_τ0::AbstractMatrix{T}, G_0τ::AbstractMatrix{T};
+    # Keyword Arguments Start Here
+    fermion_path_integral::FermionPathIntegral{T,E},
+    fermion_greens_calculator::FermionGreensCalculator{T,E},
+    B::Vector{P},
+    model_geometry::ModelGeometry{D,E,N},
+    tight_binding_parameters::TightBindingParameters{T,E},
+    coupling_parameters::Tuple,
+    δG::E, δθ::E, δG_max::E = 1e-6
+) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
+    l₀ = fermion_greens_calculator.l
+    # @show l₀
+    # extract temporary storage vectors
+    (;
+        time_displaced_correlations,
+        equaltime_correlations,
+        time_displaced_composite_correlations,
+        equaltime_composite_correlations,
+        a, a′, a″
+    ) = measurement_container
+    tmp = selectdim(a, ndims(a), 1)
+
+    # calculate sign
+    sgn = sgndetG^2
+    sgn /= abs(sgn) # normalize just to be cautious
+
+    # make global measurements
+    global_measurements = measurement_container.global_measurements
+    make_global_measurements!(
+        global_measurements,
+        tight_binding_parameters,
+        tight_binding_parameters,
+        coupling_parameters,
+        G, logdetG, sgndetG,
+        G, logdetG, sgndetG
+    )
+
+    # make local measurements
+    local_measurements = measurement_container.local_measurements
+    make_local_measurements!(
+        local_measurements,
+        G, G, sgn, model_geometry,
+        tight_binding_parameters, tight_binding_parameters,
+        fermion_path_integral, fermion_path_integral,
+        coupling_parameters,l₀
+    )
+
+    # initialize green's function matrices G(τ,0), G(0,τ) and G(τ,τ) based on G(0,0)
+    initialize_unequaltime_greens!(G_τ0, G_0τ, G_ττ, G)
+
+    # make equal-time correlation measurements
+    make_equaltime_measurements!(
+        equaltime_correlations, sgn,
+        G, G_ττ, G_τ0, G_0τ, G, G_ττ, G_τ0, G_0τ,
+        model_geometry, tight_binding_parameters, tight_binding_parameters,
+        fermion_path_integral, fermion_path_integral, l₀
+    )
+
+    # make equal-time composite correlation measurements
+    make_equaltime_composite_measurements!(
+        equaltime_composite_correlations, sgn,
+        G, G_ττ, G_τ0, G_0τ, G, G_ττ, G_τ0, G_0τ,
+        model_geometry, tight_binding_parameters, tight_binding_parameters,
+        fermion_path_integral, fermion_path_integral,
+        tmp
+    )
+    return (logdetG, sgndetG, δG, δθ)
+end
 ############end by kangw May 22, 2025 ##############
+
+
 
 @doc raw"""
     make_measurements!(
@@ -169,7 +264,7 @@ function make_measurements!(
     coupling_parameters::Tuple,
     δG::E, δθ::E, δG_max::E = 1e-6
 ) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
-
+    l₀ = fermion_greens_calculator_up.l
     # extract temporary storage vectors
     (; 
         time_displaced_correlations,
@@ -209,7 +304,7 @@ function make_measurements!(
         model_geometry,
         tight_binding_parameters_up, tight_binding_parameters_dn,
         fermion_path_integral_up, fermion_path_integral_dn,
-        coupling_parameters
+        coupling_parameters, l₀
     )
 
     # initialize green's function matrices G(τ,0), G(0,τ) and G(τ,τ) based on G(0,0)
@@ -222,7 +317,7 @@ function make_measurements!(
         Gup, Gup_ττ, Gup_τ0, Gup_0τ,
         Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
         model_geometry, tight_binding_parameters_up, tight_binding_parameters_dn,
-        fermion_path_integral_up, fermion_path_integral_dn
+        fermion_path_integral_up, fermion_path_integral_dn, l₀
     )
 
     # make equal-time composite correlation measurements
@@ -375,7 +470,7 @@ function make_measurements!(
     coupling_parameters::Tuple,
     δG::E, δθ::E, δG_max::E = 1e-6
 ) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
-
+    l₀ = fermion_greens_calculator.l
     # extract temporary storage vectors
     (;
         time_displaced_correlations,
@@ -408,7 +503,7 @@ function make_measurements!(
         G, G, sgn, model_geometry,
         tight_binding_parameters, tight_binding_parameters,
         fermion_path_integral, fermion_path_integral,
-        coupling_parameters
+        coupling_parameters, l₀
     )
 
     # initialize green's function matrices G(τ,0), G(0,τ) and G(τ,τ) based on G(0,0)
@@ -419,7 +514,7 @@ function make_measurements!(
         equaltime_correlations, sgn,
         G, G_ττ, G_τ0, G_0τ, G, G_ττ, G_τ0, G_0τ,
         model_geometry, tight_binding_parameters, tight_binding_parameters,
-        fermion_path_integral, fermion_path_integral
+        fermion_path_integral, fermion_path_integral, l₀
     )
 
     # make equal-time composite correlation measurements
@@ -666,7 +761,7 @@ function make_local_measurements!(
     tight_binding_parameters_dn::TightBindingParameters{T,E},
     fermion_path_integral_up::FermionPathIntegral{T,E},
     fermion_path_integral_dn::FermionPathIntegral{T,E},
-    coupling_parameters::Tuple
+    coupling_parameters::Tuple,l₀::Int64
 ) where {T<:Number, E<:AbstractFloat, D, N}
 
     # number of orbitals per unit cell
@@ -688,7 +783,7 @@ function make_local_measurements!(
     # make tight-binding measurements
     make_local_measurements!(local_measurements, Gup, Gdn, sgn, model_geometry,
                              tight_binding_parameters_up, tight_binding_parameters_dn,
-                             fermion_path_integral_up, fermion_path_integral_dn)
+                             fermion_path_integral_up, fermion_path_integral_dn,l₀)
 
     # make local measurements associated with couplings
     for coupling_parameter in coupling_parameters
@@ -707,7 +802,7 @@ function make_local_measurements!(
     tight_binding_parameters_up::TightBindingParameters{T,E},
     tight_binding_parameters_dn::TightBindingParameters{T,E},
     fermion_path_integral_up::FermionPathIntegral{T,E},
-    fermion_path_integral_dn::FermionPathIntegral{T,E}
+    fermion_path_integral_dn::FermionPathIntegral{T,E},l₀::Int64
 ) where {T<:Number, E<:AbstractFloat, D, N}
 
     # number of orbitals per unit cell
@@ -732,8 +827,8 @@ function make_local_measurements!(
         for n in 1:nhopping
 
             # get the bond ID corresponding to the hopping
-            bond_id = bond_ids[n]
-
+            # bond_id = bond_ids[n]
+            bond_id = n
             # measure bare hopping energy
             hup = sgn * measure_bare_hopping_energy(tight_binding_parameters_up, Gup, bond_id)
             hdn = sgn * measure_bare_hopping_energy(tight_binding_parameters_dn, Gdn, bond_id)
@@ -743,8 +838,8 @@ function make_local_measurements!(
             local_measurements["bare_hopping_energy"][n] += h
 
             # measure hopping amplitude
-            hup = sgn * measure_hopping_energy(tight_binding_parameters_up, fermion_path_integral_up, Gup, bond_id)
-            hdn = sgn * measure_hopping_energy(tight_binding_parameters_dn, fermion_path_integral_up, Gdn, bond_id)
+            hup = sgn * measure_hopping_energy(tight_binding_parameters_up, fermion_path_integral_up, Gup, bond_id, l₀)
+            hdn = sgn * measure_hopping_energy(tight_binding_parameters_dn, fermion_path_integral_up, Gdn, bond_id, l₀)
             h = hup + hdn
             local_measurements["hopping_energy_up"][n] += hup
             local_measurements["hopping_energy_dn"][n] += hdn
@@ -978,7 +1073,7 @@ function make_equaltime_measurements!(
     tight_binding_parameters_up::TightBindingParameters{T,E},
     tight_binding_parameters_dn::TightBindingParameters{T,E},
     fermion_path_integral_up::FermionPathIntegral{T,E},
-    fermion_path_integral_dn::FermionPathIntegral{T,E}
+    fermion_path_integral_dn::FermionPathIntegral{T,E},l₀::Int64
 ) where {T<:Number, E<:AbstractFloat, D, N}
 
     Lτ = fermion_path_integral_up.Lτ::Int
@@ -1200,9 +1295,9 @@ function make_equaltime_measurements!(
                 bond_0 = bonds[bond_id_0]
                 bond_1 = bonds[bond_id_1]
                 # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                tup0 = @view tup[bond_slices[hopping_id_0], Lτ]
+                tup0 = @view tup[bond_slices[hopping_id_0], l₀]
                 tup0′ = reshape(tup0, lattice.L...)
-                tup1 = @view tup[bond_slices[hopping_id_1], Lτ]
+                tup1 = @view tup[bond_slices[hopping_id_1], l₀]
                 tup1′ = reshape(tup1, lattice.L...)
                 # measure the current-current correlation
                 current_correlation!(correlations[i], bond_1, bond_0, tup1′, tup0′, unit_cell, lattice,
@@ -1226,9 +1321,9 @@ function make_equaltime_measurements!(
                 bond_0 = bonds[bond_id_0]
                 bond_1 = bonds[bond_id_1]
                 # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                tdn0 = @view tdn[bond_slices[hopping_id_0], Lτ]
+                tdn0 = @view tdn[bond_slices[hopping_id_0], l₀]
                 tdn0′ = reshape(tdn0, lattice.L...)
-                tdn1 = @view tdn[bond_slices[hopping_id_1], Lτ]
+                tdn1 = @view tdn[bond_slices[hopping_id_1], l₀]
                 tdn1′ = reshape(tdn1, lattice.L...)
                 # measure the current-current correlation
                 current_correlation!(correlations[i], bond_1, bond_0, tdn1′, tdn0′, unit_cell, lattice,
@@ -1253,9 +1348,9 @@ function make_equaltime_measurements!(
                 bond_0 = bonds[bond_id_0]
                 bond_1 = bonds[bond_id_1]
                 # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                tup1 = @view tup[bond_slices[hopping_id_1], Lτ]
+                tup1 = @view tup[bond_slices[hopping_id_1], l₀]
                 tup1′ = reshape(tup1, lattice.L...)
-                tdn0 = @view tdn[bond_slices[hopping_id_0], Lτ]
+                tdn0 = @view tdn[bond_slices[hopping_id_0], l₀]
                 tdn0′ = reshape(tdn0, lattice.L...)
                 # measure the current-current correlation
                 current_correlation!(correlations[i], bond_1, bond_0, tup1′, tdn0′, unit_cell, lattice,
@@ -1280,9 +1375,9 @@ function make_equaltime_measurements!(
                 bond_0 = bonds[bond_id_0]
                 bond_1 = bonds[bond_id_1]
                 # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                tup0 = @view tup[bond_slices[hopping_id_0], Lτ]
+                tup0 = @view tup[bond_slices[hopping_id_0], l₀]
                 tup0′ = reshape(tup0, lattice.L...)
-                tdn1 = @view tdn[bond_slices[hopping_id_1], Lτ]
+                tdn1 = @view tdn[bond_slices[hopping_id_1], l₀]
                 tdn1′ = reshape(tdn1, lattice.L...)
                 # measure the current-current correlation
                 current_correlation!(correlations[i], bond_1, bond_0, tdn1′, tup0′, unit_cell, lattice,
@@ -1307,13 +1402,13 @@ function make_equaltime_measurements!(
                 bond_0 = bonds[bond_id_0]
                 bond_1 = bonds[bond_id_1]
                 # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                tup0 = @view tup[bond_slices[hopping_id_0], Lτ]
+                tup0 = @view tup[bond_slices[hopping_id_0], l₀]
                 tup0′ = reshape(tup0, lattice.L...)
-                tup1 = @view tup[bond_slices[hopping_id_1], Lτ]
+                tup1 = @view tup[bond_slices[hopping_id_1], l₀]
                 tup1′ = reshape(tup1, lattice.L...)
-                tdn0 = @view tdn[bond_slices[hopping_id_0], Lτ]
+                tdn0 = @view tdn[bond_slices[hopping_id_0], l₀]
                 tdn0′ = reshape(tdn0, lattice.L...)
-                tdn1 = @view tdn[bond_slices[hopping_id_1], Lτ]
+                tdn1 = @view tdn[bond_slices[hopping_id_1], l₀]
                 tdn1′ = reshape(tdn1, lattice.L...)
                 # measure the current-current correlation
                 current_correlation!(correlations[i], bond_1, bond_0, tup1′, tup0′, tdn1′, tdn0′, unit_cell, lattice,
@@ -1671,9 +1766,9 @@ function make_equaltime_composite_measurements!(
                     bond_0 = bonds[bond_id_0]
                     bond_1 = bonds[bond_id_1]
                     # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                    tup0 = @view tup[bond_slices[hopping_id_0], Lτ]
+                    tup0 = @view tup[bond_slices[hopping_id_0], l₀]
                     tup0′ = reshape(tup0, lattice.L...)
-                    tup1 = @view tup[bond_slices[hopping_id_1], Lτ]
+                    tup1 = @view tup[bond_slices[hopping_id_1], l₀]
                     tup1′ = reshape(tup1, lattice.L...)
                     # measure the current-current correlation
                     current_correlation!(
@@ -1705,9 +1800,9 @@ function make_equaltime_composite_measurements!(
                     bond_0 = bonds[bond_id_0]
                     bond_1 = bonds[bond_id_1]
                     # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                    tdn0 = @view tdn[bond_slices[hopping_id_0], Lτ]
+                    tdn0 = @view tdn[bond_slices[hopping_id_0], l₀]
                     tdn0′ = reshape(tdn0, lattice.L...)
-                    tdn1 = @view tdn[bond_slices[hopping_id_1], Lτ]
+                    tdn1 = @view tdn[bond_slices[hopping_id_1], l₀]
                     tdn1′ = reshape(tdn1, lattice.L...)
                     # measure the current-current correlation
                     current_correlation!(
@@ -1740,9 +1835,9 @@ function make_equaltime_composite_measurements!(
                     bond_0 = bonds[bond_id_0]
                     bond_1 = bonds[bond_id_1]
                     # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                    tup1 = @view tup[bond_slices[hopping_id_1], Lτ]
+                    tup1 = @view tup[bond_slices[hopping_id_1], l₀]
                     tup1′ = reshape(tup1, lattice.L...)
-                    tdn0 = @view tdn[bond_slices[hopping_id_0], Lτ]
+                    tdn0 = @view tdn[bond_slices[hopping_id_0], l₀]
                     tdn0′ = reshape(tdn0, lattice.L...)
                     # measure the current-current correlation
                     current_correlation!(
@@ -1775,9 +1870,9 @@ function make_equaltime_composite_measurements!(
                     bond_0 = bonds[bond_id_0]
                     bond_1 = bonds[bond_id_1]
                     # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                    tup0 = @view tup[bond_slices[hopping_id_0], Lτ]
+                    tup0 = @view tup[bond_slices[hopping_id_0], l₀]
                     tup0′ = reshape(tup0, lattice.L...)
-                    tdn1 = @view tdn[bond_slices[hopping_id_1], Lτ]
+                    tdn1 = @view tdn[bond_slices[hopping_id_1], l₀]
                     tdn1′ = reshape(tdn1, lattice.L...)
                     # measure the current-current correlation
                     current_correlation!(
@@ -1810,13 +1905,13 @@ function make_equaltime_composite_measurements!(
                     bond_0 = bonds[bond_id_0]
                     bond_1 = bonds[bond_id_1]
                     # get the effective hopping amptlitudes for each of the two hopping ID's in question
-                    tup0 = @view tup[bond_slices[hopping_id_0], Lτ]
+                    tup0 = @view tup[bond_slices[hopping_id_0], l₀]
                     tup0′ = reshape(tup0, lattice.L...)
-                    tup1 = @view tup[bond_slices[hopping_id_1], Lτ]
+                    tup1 = @view tup[bond_slices[hopping_id_1], l₀]
                     tup1′ = reshape(tup1, lattice.L...)
-                    tdn0 = @view tdn[bond_slices[hopping_id_0], Lτ]
+                    tdn0 = @view tdn[bond_slices[hopping_id_0], l₀]
                     tdn0′ = reshape(tdn0, lattice.L...)
-                    tdn1 = @view tdn[bond_slices[hopping_id_1], Lτ]
+                    tdn1 = @view tdn[bond_slices[hopping_id_1], l₀]
                     tdn1′ = reshape(tdn1, lattice.L...)
                     # measure the current-current correlation
                     current_correlation!(

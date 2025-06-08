@@ -99,6 +99,9 @@ struct HubbardParameters{T<:AbstractFloat}
 
     # whether zero on-site energy corresponds to half-filling in atomic limit
     shifted::Bool
+
+    # decouple channel
+    channel::String
 end
 
 @doc raw"""
@@ -113,6 +116,7 @@ Initialize an instance of [`HubbardParameters`](@ref).
 function HubbardParameters(;
     hubbard_model::HubbardModel{T},
     model_geometry::ModelGeometry{D,T},
+    channel::Union{Nothing, String}=nothing,
     rng::AbstractRNG
 ) where {D, T<:AbstractFloat}
 
@@ -147,7 +151,19 @@ function HubbardParameters(;
         end
     end
 
-    return HubbardParameters(U, sites, U_orbital, shifted)
+    selected_channel = if channel === "s" || channel === "d"
+        channel
+    else
+        ### if channel not defined, determine it from U_mean and select real channel
+        if all(U_mean .> 0)
+            "s"
+        elseif all(U_mean .< 0)
+            "d"
+        else
+            error("Cannot determine interaction channel: U_mean contains both positive and negative values. Please specify channel=\"s\" or channel=\"d\" explicitly.")
+        end
+    end
+    return HubbardParameters(U, sites, U_orbital, shifted, selected_channel)
 end
 
 

@@ -571,7 +571,7 @@ function hmc_update!(
             # record that numerically instability was encountered
             numerically_stable = false
             @error "2. Numerical instability in fermionic action derivative"
-            @show δG′, logdetGup
+            @show δG′, logdetG
             # terminate the HMC trajectory
             break
         end
