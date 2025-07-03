@@ -1,0 +1,25 @@
+[simulation_info]
+
+name  = "./data/test/Lx4_Ly4_BC00_b4.00/photon_minicoup_square_w1.00_g2.00_U1.00_mu0.00_Lx4_Ly4_BC00_b4.00_eqavg0_tdavg0_init0"
+sID   = 1
+pID   = 0
+smoqydqmc_version = "1.0.25"
+julia_version     = "1.11.2"
+
+[additional_info]
+N_bins = 1
+N_burnin = 0
+N_updates = 5
+Nt = 8
+bin_size = 5
+checkerboard = false
+dG = 3.0062804020525045e-13
+dG_max = 1.0e-6
+dt = 0.19634954084936207
+hmc_acceptance_rate = 1.0
+local_acceptance_rate = 0.9206249999999999
+n_stab_final = 10
+n_stab_init = 10
+reflection_acceptance_rate = 0.4
+seed = 6011410111635174887
+symmetric = false

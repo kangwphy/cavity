@@ -215,6 +215,415 @@ function make_static_measurements!(
     )
     return (logdetG, sgndetG, δG, δθ)
 end
+
+
+
+
+
+
+@doc raw"""
+    make_dynamic_measurements!(
+        measurement_container::NamedTuple,
+        logdetGup::E, sgndetGup::T, Gup::AbstractMatrix{T},
+        Gup_ττ::AbstractMatrix{T}, Gup_τ0::AbstractMatrix{T}, Gup_0τ::AbstractMatrix{T},
+        logdetGdn::E, sgndetGdn::T, Gdn::AbstractMatrix{T},
+        Gdn_ττ::AbstractMatrix{T}, Gdn_τ0::AbstractMatrix{T}, Gdn_0τ::AbstractMatrix{T};
+        # Keyword Arguments Start Here
+        fermion_path_integral_up::FermionPathIntegral{T,E},
+        fermion_path_integral_dn::FermionPathIntegral{T,E},
+        fermion_greens_calculator_up::FermionGreensCalculator{T,E},
+        fermion_greens_calculator_dn::FermionGreensCalculator{T,E},
+        Bup::Vector{P}, Bdn::Vector{P},
+        model_geometry::ModelGeometry{D,E,N},
+        tight_binding_parameters::Union{Nothing, TightBindingParameters{T,E}} = nothing,
+        tight_binding_parameters_up::Union{Nothing, TightBindingParameters{T,E}} = nothing,
+        tight_binding_parameters_dn::Union{Nothing, TightBindingParameters{T,E}} = nothing,
+        coupling_parameters::Tuple,
+        δG::E, δθ::E, δG_max::E = 1e-6
+    ) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
+
+Make measurements, including time-displaced correlation and zero Matsubara frequency measurements.
+This method also returns `(logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ)`.
+Note that either the keywork `tight_binding_parameters` needs to be specified, or
+`tight_binding_parameters_up` and `tight_binding_parameters_dn` both need to be specified.
+"""
+function make_dynamic_measurements!(
+    measurement_container::NamedTuple,
+    logdetGup::E, sgndetGup::T, Gup::AbstractMatrix{T},
+    Gup_ττ::AbstractMatrix{T}, Gup_τ0::AbstractMatrix{T}, Gup_0τ::AbstractMatrix{T},
+    logdetGdn::E, sgndetGdn::T, Gdn::AbstractMatrix{T},
+    Gdn_ττ::AbstractMatrix{T}, Gdn_τ0::AbstractMatrix{T}, Gdn_0τ::AbstractMatrix{T};
+    # Keyword Arguments Start Here
+    fermion_path_integral_up::FermionPathIntegral{T,E},
+    fermion_path_integral_dn::FermionPathIntegral{T,E},
+    fermion_greens_calculator_up::FermionGreensCalculator{T,E},
+    fermion_greens_calculator_dn::FermionGreensCalculator{T,E},
+    Bup::Vector{P}, Bdn::Vector{P},
+    model_geometry::ModelGeometry{D,E,N},
+    tight_binding_parameters::Union{Nothing, TightBindingParameters{T,E}} = nothing,
+    tight_binding_parameters_up::Union{Nothing, TightBindingParameters{T,E}} = nothing,
+    tight_binding_parameters_dn::Union{Nothing, TightBindingParameters{T,E}} = nothing,
+    coupling_parameters::Tuple,
+    δG::E, δθ::E, δG_max::E = 1e-6
+) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
+    l₀ = fermion_greens_calculator_up.l
+    # extract temporary storage vectors
+    (; 
+        time_displaced_correlations,
+        equaltime_correlations,
+        equaltime_composite_correlations,
+        time_displaced_composite_correlations,
+        a, a′, a″
+    ) = measurement_container
+    tmp = selectdim(a, ndims(a), 1)
+
+    # assign spin-up and spin-down tight-binding parameters if necessary
+    if !isnothing(tight_binding_parameters)
+        tight_binding_parameters_up = tight_binding_parameters
+        tight_binding_parameters_dn = tight_binding_parameters
+    end
+
+    # calculate sign
+    sgn = sgndetGup * sgndetGdn
+    sgn /= abs(sgn) # normalize just to be cautious
+
+    # initialize green's function matrices G(τ,0), G(0,τ) and G(τ,τ) based on G(0,0)
+    initialize_unequaltime_greens!(Gup_τ0, Gup_0τ, Gup_ττ, Gup)
+    initialize_unequaltime_greens!(Gdn_τ0, Gdn_0τ, Gdn_ττ, Gdn)
+
+  
+    # if there are time-displaced measurements to make
+    if length(time_displaced_correlations) > 0 || length(time_displaced_composite_correlations) > 0
+
+        # make time-displaced correlation measuresurements for τ = l⋅Δτ = 0
+        make_time_displaced_measurements!(
+            time_displaced_correlations, 0, sgn,
+            Gup, Gup_ττ, Gup_τ0, Gup_0τ, Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
+            model_geometry, tight_binding_parameters_up, tight_binding_parameters_dn,
+            fermion_path_integral_up, fermion_path_integral_dn
+        )
+
+        # make time-displaced composite correlation measuresurements for τ = l⋅Δτ = 0
+        make_time_displaced_composite_measurements!(
+            time_displaced_composite_correlations, 0, sgn,
+            Gup, Gup_ττ, Gup_τ0, Gup_0τ, Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
+            model_geometry, tight_binding_parameters_up, tight_binding_parameters_dn,
+            fermion_path_integral_up, fermion_path_integral_dn,
+            tmp
+        )
+
+        # iterate over imaginary time slice
+        for l in fermion_greens_calculator_up
+
+            # Propagate Green's function matrices to current imaginary time slice
+            propagate_unequaltime_greens!(Gup_τ0, Gup_0τ, Gup_ττ, fermion_greens_calculator_up, Bup)
+            propagate_unequaltime_greens!(Gdn_τ0, Gdn_0τ, Gdn_ττ, fermion_greens_calculator_dn, Bdn)
+
+            # make time-displaced correlation measuresurements for τ = l⋅Δτ
+            make_time_displaced_measurements!(
+                time_displaced_correlations, l, sgn,
+                Gup, Gup_ττ, Gup_τ0, Gup_0τ, Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
+                model_geometry, tight_binding_parameters_up, tight_binding_parameters_dn,
+                fermion_path_integral_up, fermion_path_integral_dn
+            )
+
+            # make time-displaced correlation measuresurements for τ = l⋅Δτ
+            make_time_displaced_composite_measurements!(
+                time_displaced_composite_correlations, l, sgn,
+                Gup, Gup_ττ, Gup_τ0, Gup_0τ, Gdn, Gdn_ττ, Gdn_τ0, Gdn_0τ,
+                model_geometry, tight_binding_parameters_up, tight_binding_parameters_dn,
+                fermion_path_integral_up, fermion_path_integral_dn,
+                tmp
+            )
+
+            ##### fix sign for Hubabrd density channel #####
+            sgn0 = 1.0
+            indx = findfirst(i -> typeof(i) <: HubbardIsingHSParameters, coupling_parameters)
+            if !isnothing(indx)
+                hubbard_ising_parameters = coupling_parameters[indx]
+                (;  α, s, channel) = hubbard_ising_parameters
+                if channel == "d"
+                    sgn0 = sign(exp(α[1] * sum(s)/2))
+                end
+            end
+            # Periodically re-calculate the Green's function matrix for numerical stability.
+            logdetGup, sgndetGup, δGup, δθup = stabilize_unequaltime_greens!(
+                Gup_τ0, Gup_0τ, Gup_ττ, logdetGup, sgndetGup,
+                fermion_greens_calculator_up, Bup, update_B̄=false,sgn0=sgn0
+            )
+            logdetGdn, sgndetGdn, δGdn, δθdn = stabilize_unequaltime_greens!(
+                Gdn_τ0, Gdn_0τ, Gdn_ττ, logdetGdn, sgndetGdn,
+                fermion_greens_calculator_dn, Bdn, update_B̄=false,sgn0=sgn0
+            )
+
+            # record the max errors
+            δG = maximum((δG, δGup, δGdn))
+            δθ = maximum(abs, (δθ, δθup, δθdn))
+
+            # Keep up and down spin Green's functions synchronized as iterating over imaginary time.
+            iterate(fermion_greens_calculator_dn, fermion_greens_calculator_up.forward)
+        end
+    end
+
+    # measure equal-time phonon greens function
+    if haskey(equaltime_correlations, "phonon_greens")
+
+        # get the electron-phonon parameters
+        indx = findfirst(i -> typeof(i) <: ElectronPhononParameters, coupling_parameters)
+
+        # measure phonon green's function
+        measure_equaltime_phonon_greens!(equaltime_correlations["phonon_greens"], coupling_parameters[indx], model_geometry, sgn, a, a′, a″)
+    end
+
+    # measure time-displaced phonon greens function
+    if haskey(time_displaced_correlations, "phonon_greens")
+
+        # get the electron-phonon parameters
+        indx = findfirst(i -> typeof(i) <: ElectronPhononParameters, coupling_parameters)
+
+        # measure phonon green's function
+        measure_time_displaced_phonon_greens!(time_displaced_correlations["phonon_greens"], coupling_parameters[indx], model_geometry, sgn, a, a′, a″)
+    end
+
+
+
+    ########### by kangw ###########
+    # measure equal-time photon greens function
+    if haskey(equaltime_correlations, "photon_greens")
+
+        # get the electron-photon parameters
+        indx = findfirst(i -> typeof(i) <: ElectronPhotonParameters, coupling_parameters)
+
+        # measure photon green's function
+        measure_equaltime_photon_greens!(equaltime_correlations["photon_greens"], coupling_parameters[indx], model_geometry, sgn, a, a′, a″)
+    end
+
+    # measure time-displaced photon greens function
+    if haskey(time_displaced_correlations, "photon_greens")
+
+        # get the electron-photon parameters
+        indx = findfirst(i -> typeof(i) <: ElectronPhotonParameters, coupling_parameters)
+
+        # measure photon green's function
+        measure_time_displaced_photon_greens!(time_displaced_correlations["photon_greens"], coupling_parameters[indx], model_geometry, sgn, a, a′, a″)
+    end
+    ########### by kangw ###########
+    return (logdetGup, sgndetGup, logdetGdn, sgndetGdn, δG, δθ)
+end
+
+@doc raw"""
+    make_dynamic_measurements!(
+        measurement_container::NamedTuple,
+        logdetG::E, sgndetG::T, G::AbstractMatrix{T},
+        G_ττ::AbstractMatrix{T}, G_τ0::AbstractMatrix{T}, G_0τ::AbstractMatrix{T};
+        # Keyword Arguments Start Here
+        fermion_path_integral::FermionPathIntegral{T,E},
+        fermion_greens_calculator::FermionGreensCalculator{T,E},
+        B::Vector{P},
+        model_geometry::ModelGeometry{D,E,N},
+        tight_binding_parameters::TightBindingParameters{T,E},
+        coupling_parameters::Tuple,
+        δG::E, δθ::E, δG_max::E = 1e-6
+    ) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
+
+Make measurements, including time-displaced correlation and zero Matsubara frequency measurements.
+This method also returns `(logdetG, sgndetG, δG, δθ)`.
+"""
+function make_dynamic_measurements!(
+    measurement_container::NamedTuple,
+    logdetG::E, sgndetG::T, G::AbstractMatrix{T},
+    G_ττ::AbstractMatrix{T}, G_τ0::AbstractMatrix{T}, G_0τ::AbstractMatrix{T};
+    # Keyword Arguments Start Here
+    fermion_path_integral::FermionPathIntegral{T,E},
+    fermion_greens_calculator::FermionGreensCalculator{T,E},
+    B::Vector{P},
+    model_geometry::ModelGeometry{D,E,N},
+    tight_binding_parameters::TightBindingParameters{T,E},
+    coupling_parameters::Tuple,
+    δG::E, δθ::E, δG_max::E = 1e-6
+) where {T<:Number, E<:AbstractFloat, D, N, P<:AbstractPropagator{T,E}}
+    l₀ = fermion_greens_calculator.l
+    # extract temporary storage vectors
+    (;
+        time_displaced_correlations,
+        equaltime_correlations,
+        time_displaced_composite_correlations,
+        equaltime_composite_correlations,
+        a, a′, a″
+    ) = measurement_container
+    tmp = selectdim(a, ndims(a), 1)
+
+    # calculate sign
+    sgn = sgndetG^2
+    sgn /= abs(sgn) # normalize just to be cautious
+
+    # initialize green's function matrices G(τ,0), G(0,τ) and G(τ,τ) based on G(0,0)
+    initialize_unequaltime_greens!(G_τ0, G_0τ, G_ττ, G)
+
+    # if there are time-displaced measurements to make
+    if length(time_displaced_correlations) > 0 || length(time_displaced_composite_correlations) > 0
+
+        # make time-displaced correlation measuresurements of τ = 0
+        make_time_displaced_measurements!(
+            time_displaced_correlations, 0, sgn,
+            G, G_ττ, G_τ0, G_0τ, G, G_ττ, G_τ0, G_0τ,
+            model_geometry, tight_binding_parameters, tight_binding_parameters,
+            fermion_path_integral, fermion_path_integral,
+        )
+
+        # make time-displaced composite correlation measuresurements of τ = 0
+        make_time_displaced_composite_measurements!(
+            time_displaced_composite_correlations, 0, sgn,
+            G, G_ττ, G_τ0, G_0τ, G, G_ττ, G_τ0, G_0τ,
+            model_geometry, tight_binding_parameters, tight_binding_parameters,
+            fermion_path_integral, fermion_path_integral,
+            tmp
+        )
+
+        # iterate over imaginary time slice
+        for l in fermion_greens_calculator
+
+            # Propagate Green's function matrices to current imaginary time slice
+            propagate_unequaltime_greens!(G_τ0, G_0τ, G_ττ, fermion_greens_calculator, B)
+
+            # make time-displaced correlation measuresurements of τ = l⋅Δτ
+            make_time_displaced_measurements!(
+                time_displaced_correlations, l, sgn,
+                G, G_ττ, G_τ0, G_0τ, G, G_ττ, G_τ0, G_0τ,
+                model_geometry, tight_binding_parameters, tight_binding_parameters,
+                fermion_path_integral, fermion_path_integral
+            )
+
+            # make time-displaced composite correlation measuresurements of τ = l⋅Δτ
+            make_time_displaced_composite_measurements!(
+                time_displaced_composite_correlations, l, sgn,
+                G, G_ττ, G_τ0, G_0τ, G, G_ττ, G_τ0, G_0τ,
+                model_geometry, tight_binding_parameters, tight_binding_parameters,
+                fermion_path_integral, fermion_path_integral,
+                tmp
+            )
+            
+            ##### fix sign for Hubabrd density channel #####
+            sgn0 = 1.0
+            indx = findfirst(i -> typeof(i) <: HubbardIsingHSParameters, coupling_parameters)
+            if !isnothing(indx)
+                hubbard_ising_parameters = coupling_parameters[indx]
+                (;  α, s, channel) = hubbard_ising_parameters
+                if channel == "d"
+                    sgn0 = sign(exp(α[1] * sum(s)/2))
+                end
+            end
+            # Periodically re-calculate the Green's function matrix for numerical stability.
+            logdetG, sgndetG, δG′, δθ = stabilize_unequaltime_greens!(G_τ0, G_0τ, G_ττ, logdetG, sgndetG, fermion_greens_calculator, B, update_B̄=false, sgn0=sgn0)
+
+            # record maximum stablization error
+            δG = max(δG′, δG)
+        end
+    end
+
+    # determine if electron-phonon parameters were passed
+    indx = findfirst(i -> typeof(i) <: ElectronPhononParameters, coupling_parameters)
+
+    # if electron-phonon parameters were passed
+    if !isnothing(indx)
+
+        # get electron-phonon coupling parameters
+        elph_params = coupling_parameters[indx]
+
+        # measure equal-time phonon greens function
+        if haskey(equaltime_correlations, "phonon_greens")
+            # measure phonon green's function
+            measure_equaltime_phonon_greens!(
+                equaltime_correlations["phonon_greens"], elph_params, model_geometry, sgn, a, a′, a″
+            )
+        end
+
+        # measure time-displaced phonon greens function
+        if haskey(time_displaced_correlations, "phonon_greens")
+            # measure phonon green's function
+            measure_time_displaced_phonon_greens!(
+                time_displaced_correlations["phonon_greens"], elph_params, model_geometry, sgn, a, a′, a″
+            )
+        end
+
+        # iterate over composite equal-time correlations
+        for name in keys(equaltime_composite_correlations)
+            # check if composite phonon green's function measurement
+            if equaltime_composite_correlations[name].correlation == "phonon_greens"
+                # measure equal-time composite phonon green's function
+                measure_equaltime_composite_phonon_greens!(
+                    equaltime_composite_correlations[name], elph_params, model_geometry, sgn, a, a′, a″
+                )
+            end
+        end
+
+        # iterate over composite equal-time correlations
+        for name in keys(time_displaced_composite_correlations)
+            # check if composite phonon green's function measurement
+            if time_displaced_composite_correlations[name].correlation == "phonon_greens"
+                # measure equal-time composite phonon green's function
+                measure_time_displaced_composite_phonon_greens!(
+                    time_displaced_composite_correlations[name], elph_params, model_geometry, sgn, a, a′, a″
+                )
+            end
+        end
+    end
+
+    ########### by kangw ###########
+    # determine if electron-photon parameters were passed
+    indx = findfirst(i -> typeof(i) <: ElectronPhotonParameters, coupling_parameters)
+
+    # if electron-photon parameters were passed
+    if !isnothing(indx)
+
+        # get electron-photon coupling parameters
+        elph_params = coupling_parameters[indx]
+
+        # measure equal-time photon greens function
+        if haskey(equaltime_correlations, "photon_greens")
+            # measure photon green's function
+            measure_equaltime_photon_greens!(
+                equaltime_correlations["photon_greens"], elph_params, model_geometry, sgn, a, a′, a″
+            )
+        end
+
+        # measure time-displaced photon greens function
+        if haskey(time_displaced_correlations, "photon_greens")
+            # measure photon green's function
+            measure_time_displaced_photon_greens!(
+                time_displaced_correlations["photon_greens"], elph_params, model_geometry, sgn, a, a′, a″
+            )
+        end
+
+        # iterate over composite equal-time correlations
+        for name in keys(equaltime_composite_correlations)
+            # check if composite photon green's function measurement
+            if equaltime_composite_correlations[name].correlation == "photon_greens"
+                # measure equal-time composite photon green's function
+                measure_equaltime_composite_photon_greens!(
+                    equaltime_composite_correlations[name], elph_params, model_geometry, sgn, a, a′, a″
+                )
+            end
+        end
+
+        # iterate over composite equal-time correlations
+        for name in keys(time_displaced_composite_correlations)
+            # check if composite photon green's function measurement
+            if time_displaced_composite_correlations[name].correlation == "photon_greens"
+                # measure equal-time composite photon green's function
+                measure_time_displaced_composite_photon_greens!(
+                    time_displaced_composite_correlations[name], elph_params, model_geometry, sgn, a, a′, a″
+                )
+            end
+        end
+    end
+    ########### by kangw ###########
+
+
+    return (logdetG, sgndetG, δG, δθ)
+end
+
+
 ############end by kangw May 22, 2025 ##############
 
 
@@ -374,14 +783,24 @@ function make_measurements!(
                 tmp
             )
 
+            ##### fix sign for Hubabrd density channel #####
+            sgn0 = 1.0
+            indx = findfirst(i -> typeof(i) <: HubbardIsingHSParameters, coupling_parameters)
+            if !isnothing(indx)
+                hubbard_ising_parameters = coupling_parameters[indx]
+                (;  α, s, channel) = hubbard_ising_parameters
+                if channel == "d"
+                    sgn0 = sign(exp(α[1] * sum(s)/2))
+                end
+            end
             # Periodically re-calculate the Green's function matrix for numerical stability.
             logdetGup, sgndetGup, δGup, δθup = stabilize_unequaltime_greens!(
                 Gup_τ0, Gup_0τ, Gup_ττ, logdetGup, sgndetGup,
-                fermion_greens_calculator_up, Bup, update_B̄=false
+                fermion_greens_calculator_up, Bup, update_B̄=false, sgn0=sgn0
             )
             logdetGdn, sgndetGdn, δGdn, δθdn = stabilize_unequaltime_greens!(
                 Gdn_τ0, Gdn_0τ, Gdn_ττ, logdetGdn, sgndetGdn,
-                fermion_greens_calculator_dn, Bdn, update_B̄=false
+                fermion_greens_calculator_dn, Bdn, update_B̄=false, sgn0=sgn0
             )
 
             # record the max errors
@@ -569,8 +988,18 @@ function make_measurements!(
                 tmp
             )
 
+            ##### fix sign for Hubabrd density channel #####
+            sgn0 = 1.0
+            indx = findfirst(i -> typeof(i) <: HubbardIsingHSParameters, coupling_parameters)
+            if !isnothing(indx)
+                hubbard_ising_parameters = coupling_parameters[indx]
+                (;  α, s, channel) = hubbard_ising_parameters
+                if channel == "d"
+                    sgn0 = sign(exp(α[1] * sum(s)/2))
+                end
+            end
             # Periodically re-calculate the Green's function matrix for numerical stability.
-            logdetG, sgndetG, δG′, δθ = stabilize_unequaltime_greens!(G_τ0, G_0τ, G_ττ, logdetG, sgndetG, fermion_greens_calculator, B, update_B̄=false)
+            logdetG, sgndetG, δG′, δθ = stabilize_unequaltime_greens!(G_τ0, G_0τ, G_ττ, logdetG, sgndetG, fermion_greens_calculator, B, update_B̄=false, sgn0=sgn0)
 
             # record maximum stablization error
             δG = max(δG′, δG)

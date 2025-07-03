@@ -5,12 +5,12 @@ L=4
 Lx=$L
 Ly=$L
 bt=$L
-U=1
+U=10
 w=1
 mu=0
 N_burnin=0
-N_updates=10
-N_bins=1
+N_updates=5
+N_bins=2
 
 PBCx=0
 PBCy=0

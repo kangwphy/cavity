@@ -22,7 +22,7 @@ ntask=30
 Nt=8
 at=1.0
 sID=0
-g=1.0
+g=0.0
 init=0
 folder=./logs/${prefix}/Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}/g${g}w${w}U${U}mu${mu}Lx${Lx}Ly${Ly}bt${bt}BC${PBCx}${PBCy}avg_${eqt_average}${tdp_average}init${init}
 if [ ! -d $folder ];then
